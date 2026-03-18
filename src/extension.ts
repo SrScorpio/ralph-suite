@@ -42,14 +42,20 @@ export function activate(context: vscode.ExtensionContext) {
 			let task = taskId ? prd.issues.find(i => i.id === taskId) : PrdManager.nextPending(prd, root);
 			if (!task) { vscode.window.showInformationMessage('No pending tasks.'); return; }
 
-			const prompt = buildPrompt(task, prd, root);
+			const prompt      = buildPrompt(task, prd, root);
+			const freshContext = vscode.workspace.getConfiguration('ralph-suite').get<boolean>('freshContext', true);
 			try {
+				// Open a fresh chat window per task when freshContext is enabled
+				if (freshContext) {
+					await vscode.commands.executeCommand('workbench.action.chat.newChat');
+					await new Promise(r => setTimeout(r, 400)); // let new chat initialise
+				}
 				await vscode.commands.executeCommand('workbench.action.chat.open', {
 					query: prompt, isPartialQuery: false
 				});
 				RalphStateManager.setInProgress(root, task.id);
 				KanbanPanel.refresh();
-				output.appendLine(`[Ralph] Running task ${task.id}: ${task.title}`);
+				output.appendLine(`[Ralph] Running task ${task.id}: ${task.title}${freshContext ? ' (fresh context)' : ''}`);
 			} catch {
 				await vscode.env.clipboard.writeText(prompt);
 				vscode.window.showInformationMessage('Prompt copied to clipboard — paste in Chat.');
@@ -137,13 +143,33 @@ async function initProject(output: vscode.OutputChannel) {
 	const root = getWorkspaceRoot();
 	if (!root) { vscode.window.showErrorMessage('No workspace open.'); return; }
 
-	const prdPath = path.join(root, 'prd.json');
+	const prdPath  = path.join(root, 'prd.json');
+	const ralphDir = path.join(root, '.ralph');
+
 	if (fs.existsSync(prdPath)) {
 		const action = await vscode.window.showInformationMessage(
 			'prd.json already exists.', 'Open Kanban', 'Cancel'
 		);
-		if (action === 'Open Kanban') vscode.commands.executeCommand('ralph-suite.openKanban');
+		if (action === 'Open Kanban') { vscode.commands.executeCommand('ralph-suite.openKanban'); }
 		return;
+	}
+
+	// Warn if .ralph/ has leftover state from a previous project
+	if (fs.existsSync(ralphDir)) {
+		const statusFiles = fs.readdirSync(ralphDir).filter(f => f.endsWith('-status'));
+		if (statusFiles.length > 0) {
+			const action = await vscode.window.showWarningMessage(
+				`Found ${statusFiles.length} task status file(s) in .ralph/ from a previous project. These may cause ghost states on the new board.`,
+				'Clear .ralph/ and continue', 'Continue anyway', 'Cancel'
+			);
+			if (!action || action === 'Cancel') { return; }
+			if (action === 'Clear .ralph/ and continue') {
+				for (const f of fs.readdirSync(ralphDir)) {
+					try { fs.unlinkSync(path.join(ralphDir, f)); } catch { /**/ }
+				}
+				output.appendLine('[Ralph] Cleared .ralph/ before new project init');
+			}
+		}
 	}
 
 	const goal = await vscode.window.showInputBox({

@@ -18,6 +18,7 @@ export class KanbanPanel {
 	private loopCount  = 0;
 	private disposed   = false;
 	private runnerTimer: ReturnType<typeof setTimeout> | null = null;
+	private currentView: 'board' | 'epic' | 'history' = 'board';
 
 
 	private constructor(panel: vscode.WebviewPanel, root: string) {
@@ -117,6 +118,7 @@ export class KanbanPanel {
 			maxLoops:   s.get<number>('maxLoops', 5),
 			guardrails: s.get<string[]>('guardrails', []),
 			boundaries: s.get<string[]>('boundaries', []),
+			view:       this.currentView,
 		};
 	}
 
@@ -226,6 +228,32 @@ export class KanbanPanel {
 				break;
 			}
 
+			case 'reorderCard': {
+				const { id, targetId, before } = msg;
+				if (!id || !targetId) { break; }
+				const prdPathR = path.join(this.root, 'prd.json');
+				if (!fs.existsSync(prdPathR)) { break; }
+				try {
+					const raw   = JSON.parse(fs.readFileSync(prdPathR, 'utf-8'));
+					const items: any[] = raw.issues ?? raw.userStories ?? [];
+					const fromIdx = items.findIndex((i: any) => i.id === id);
+					const toIdx   = items.findIndex((i: any) => i.id === targetId);
+					if (fromIdx === -1 || toIdx === -1) { break; }
+					const [moved] = items.splice(fromIdx, 1);
+					const insertAt = before
+						? (fromIdx < toIdx ? toIdx - 1 : toIdx)
+						: (fromIdx < toIdx ? toIdx : toIdx + 1);
+					items.splice(Math.max(0, insertAt), 0, moved);
+					if (raw.issues)            { raw.issues = items; }
+					else if (raw.userStories)  { raw.userStories = items; }
+					fs.writeFileSync(prdPathR, JSON.stringify(raw, null, 2), 'utf-8');
+					this.render();
+				} catch (e) {
+					KanbanPanel.output?.appendLine(`[Board] Reorder failed: ${e}`);
+				}
+				break;
+			}
+
 			case 'addNote': {
 				const note = await vscode.window.showInputBox({
 					title: `Add note: ${msg.id}`,
@@ -296,6 +324,133 @@ export class KanbanPanel {
 					vscode.window.showInformationMessage('Prompt copied — paste in Copilot Chat.');
 				}
 				KanbanPanel.output?.appendLine('[GitHub] Sync prompt sent');
+				break;
+			}
+
+			case 'setView':
+				if (msg.id === 'board' || msg.id === 'epic' || msg.id === 'history') {
+					this.currentView = msg.id;
+					this.render();
+				}
+				break;
+
+			case 'showAddIssue':
+				// Handled entirely in the webview JS — just needs the send() call
+				// which opens the modal client-side. Nothing to do here.
+				break;
+
+			case 'addIssue': {
+				const prd = PrdManager.load(this.root);
+				if (!prd) { vscode.window.showErrorMessage('No prd.json found.'); break; }
+
+				const prdPath = path.join(this.root, 'prd.json');
+				const raw     = JSON.parse(fs.readFileSync(prdPath, 'utf-8'));
+				const items   = raw.issues ?? raw.userStories ?? [];
+
+				// Generate next ID based on existing format
+				const existingIds: string[] = items.map((i: any) => i.id ?? '');
+				const newId = generateNextId(existingIds);
+
+				const newIssue = {
+					id:                 newId,
+					title:              msg.issue.title,
+					description:        msg.issue.description ?? '',
+					epic:               msg.issue.epic,
+					priority:           msg.issue.priority ?? 'P2',
+					status:             'todo',
+					acceptanceCriteria: msg.issue.acceptanceCriteria ?? [],
+					dependencies:       [],
+					labels:             msg.issue.labels ?? [],
+				};
+
+				items.push(newIssue);
+				if (raw.issues)      { raw.issues = items; }
+				else if (raw.userStories) { raw.userStories = items; }
+				else                 { raw.issues = items; }
+
+				fs.writeFileSync(prdPath, JSON.stringify(raw, null, 2), 'utf-8');
+				KanbanPanel.output?.appendLine(`[Board] Added issue ${newId}: ${newIssue.title}`);
+				this.render();
+				break;
+			}
+
+			case 'addFromChat': {
+				const prd2    = PrdManager.load(this.root);
+				const prdPath2 = path.join(this.root, 'prd.json');
+				const prompt  = buildAddFromChatPrompt(prd2, prdPath2);
+				try {
+					await vscode.commands.executeCommand('workbench.action.chat.open', {
+						query: prompt, isPartialQuery: false
+					});
+				} catch {
+					await vscode.env.clipboard.writeText(prompt);
+					vscode.window.showInformationMessage('Prompt copied — paste in Copilot Chat.');
+				}
+				break;
+			}
+
+			case 'importPlan': {
+				const activeDoc = vscode.window.activeTextEditor?.document;
+				let planText: string | undefined;
+				if (activeDoc && (activeDoc.languageId === 'markdown' || activeDoc.fileName.endsWith('.md') || activeDoc.fileName.includes('.prompt'))) {
+					planText = activeDoc.getText();
+				} else {
+					const uris = await vscode.window.showOpenDialog({ title: 'Select Plan markdown', canSelectMany: false, filters: { 'Markdown': ['md'], 'All Files': ['*'] }, openLabel: 'Import Plan' });
+					if (uris?.length) { planText = fs.readFileSync(uris[0].fsPath, 'utf-8'); }
+				}
+				if (!planText) { break; }
+				const imported = importPlanToPrd(planText);
+				if (!imported || !imported.issues.length) { vscode.window.showErrorMessage('Could not parse tasks from the plan.'); break; }
+				const prdPathI = path.join(this.root, 'prd.json');
+
+				// Warn about leftover .ralph/ state if this is a fresh import (no prd.json)
+				if (!fs.existsSync(prdPathI)) {
+					const ralphDir = path.join(this.root, '.ralph');
+					if (fs.existsSync(ralphDir)) {
+						const statusFiles = fs.readdirSync(ralphDir).filter(f => f.endsWith('-status'));
+						if (statusFiles.length > 0) {
+							const action = await vscode.window.showWarningMessage(
+								`Found ${statusFiles.length} task status file(s) in .ralph/ from a previous project. Clear them before importing?`,
+								'Clear .ralph/', 'Import anyway', 'Cancel'
+							);
+							if (!action || action === 'Cancel') { break; }
+							if (action === 'Clear .ralph/') {
+								for (const f of statusFiles) {
+									try { fs.unlinkSync(path.join(ralphDir, f)); } catch { /**/ }
+								}
+								KanbanPanel.output?.appendLine('[Import] Cleared .ralph/ status files');
+							}
+						}
+					}
+				}
+				if (fs.existsSync(prdPathI)) {
+					const action = await vscode.window.showWarningMessage(
+						`prd.json exists — ${imported.issues.length} tasks parsed. What do you want to do?`,
+						'Append', 'Overwrite', 'Cancel'
+					);
+					if (!action || action === 'Cancel') { break; }
+					if (action === 'Append') {
+						const existing = JSON.parse(fs.readFileSync(prdPathI, 'utf-8'));
+						const existingItems: any[] = existing.issues ?? existing.userStories ?? [];
+						const existingIds = new Set(existingItems.map((i: any) => String(i.id)));
+						const reIDed = imported.issues.map(i => {
+							if (!existingIds.has(i.id)) { existingIds.add(i.id); return i; }
+							const nid = generateNextId([...existingIds]);
+							existingIds.add(nid);
+							return { ...i, id: nid };
+						});
+						existingItems.push(...reIDed);
+						if (existing.issues) { existing.issues = existingItems; } else { existing.userStories = existingItems; }
+						fs.writeFileSync(prdPathI, JSON.stringify(existing, null, 2), 'utf-8');
+						vscode.window.showInformationMessage(`Appended ${reIDed.length} issues to prd.json`);
+						KanbanPanel.output?.appendLine(`[Import] Appended ${reIDed.length} issues`);
+						this.render(); break;
+					}
+				}
+				fs.writeFileSync(prdPathI, JSON.stringify(imported, null, 2), 'utf-8');
+				vscode.window.showInformationMessage(`Created prd.json with ${imported.issues.length} issues`);
+				KanbanPanel.output?.appendLine(`[Import] Overwrote prd.json with ${imported.issues.length} issues`);
+				this.render();
 				break;
 			}
 
@@ -397,5 +552,215 @@ function buildSyncPrompt(prd: Prd, workspaceRoot: string): string {
 		``,
 		`After syncing, confirm which files were written and their status.`,
 		`Do NOT delete existing status files not found on GitHub.`,
+	].join('\n');
+}
+
+// ── Plan agent markdown → prd.json parser ────────────────────────────────────
+
+interface ImportedPrd {
+	project:     string;
+	description: string;
+	version:     string;
+	issues:      any[];
+}
+
+function importPlanToPrd(markdown: string): ImportedPrd | null {
+	const lines = markdown.split('\n');
+
+	// Extract title from "## Plan: <title>" or first H1/H2
+	let project     = 'Imported Project';
+	let description = '';
+
+	const titleMatch = markdown.match(/##\s+Plan:\s*(.+)/);
+	if (titleMatch) { project = titleMatch[1].trim(); }
+	else {
+		const h1 = markdown.match(/^#\s+(.+)/m);
+		if (h1) { project = h1[1].trim(); }
+	}
+
+	// Extract TL;DR as description
+	const tldrMatch = markdown.match(/TL;DR[^\n]*[-–]\s*(.+)/i);
+	if (tldrMatch) { description = tldrMatch[1].trim(); }
+
+	// Parse numbered steps from "**Steps**" section
+	const issues: any[] = [];
+	let inSteps    = false;
+	let stepNum    = 0;
+	let currentStep: any = null;
+
+	// Find relevant files section for later cross-referencing
+	const relevantFiles: string[] = [];
+	const fileMatches = markdown.matchAll(/`([^`]+\.[a-z]{2,6})`/g);
+	for (const m of fileMatches) { relevantFiles.push(m[1]); }
+
+	// Find verification section
+	const verifyMatch  = markdown.match(/\*\*Verification\*\*([\s\S]*?)(?=\*\*[A-Z]|\n##|$)/);
+	const verifyLines: string[] = [];
+	if (verifyMatch) {
+		for (const l of verifyMatch[1].split('\n')) {
+			const t = l.replace(/^\d+\.\s*/, '').trim();
+			if (t) { verifyLines.push(t); }
+		}
+	}
+
+	// Parse steps — support both "1. text" and "1. **Phase:** text" patterns
+	for (const line of lines) {
+		const stepMatch = line.match(/^\s*(\d+)\.\s+(.+)/);
+		if (stepMatch && (inSteps || line.match(/^\s*1\.\s+/))) {
+			inSteps = true;
+
+			// Save previous step
+			if (currentStep) { issues.push(currentStep); }
+
+			stepNum++;
+			const rawTitle = stepMatch[2]
+				.replace(/\*\*/g, '')           // remove bold
+				.replace(/\[([^\]]+)\]\([^)]+\)/, '$1') // flatten links
+				.trim();
+
+			// Detect if this is a git commit step
+			const isGitCommit = /git\s+commit|stage.*commit|commit.*message/i.test(rawTitle);
+			const epic = isGitCommit ? 'Git' : detectEpic(rawTitle);
+
+			// Priority: first 2 steps P0, next 4 P1, rest P2
+			const priority = stepNum <= 2 ? 'P0' : stepNum <= 6 ? 'P1' : 'P2';
+
+			currentStep = {
+				id:                 `STEP-${String(stepNum).padStart(3, '0')}`,
+				title:              rawTitle.slice(0, 120),
+				description:        rawTitle,
+				epic,
+				priority,
+				status:             'todo',
+				acceptanceCriteria: [],
+				dependencies:       stepNum > 1 ? [`STEP-${String(stepNum - 1).padStart(3, '0')}`] : [],
+				labels:             isGitCommit ? ['git'] : [],
+			};
+		} else if (inSteps && currentStep) {
+			// Sub-bullets inside a step → acceptance criteria
+			const bulletMatch = line.match(/^\s+[-*]\s+(.+)/);
+			if (bulletMatch) {
+				const criterion = bulletMatch[1]
+					.replace(/\*\*/g, '')
+					.replace(/\[([^\]]+)\]\([^)]+\)/, '$1')
+					.trim();
+				currentStep.acceptanceCriteria.push(criterion);
+			}
+		}
+
+		// Stop at non-steps sections
+		if (inSteps && line.match(/^\*\*(Relevant files|Verification|Decisions|Further)/i)) {
+			inSteps = false;
+		}
+	}
+	if (currentStep) { issues.push(currentStep); }
+
+	// If no steps found, try to parse from "Further Considerations" or numbered lists anywhere
+	if (!issues.length) {
+		let n = 0;
+		for (const line of lines) {
+			const m = line.match(/^\d+\.\s+(.+)/);
+			if (m) {
+				n++;
+				issues.push({
+					id:                 `TASK-${String(n).padStart(3, '0')}`,
+					title:              m[1].replace(/\*\*/g, '').trim().slice(0, 120),
+					description:        m[1].replace(/\*\*/g, '').trim(),
+					epic:               'General',
+					priority:           'P2',
+					status:             'todo',
+					acceptanceCriteria: [],
+					dependencies:       n > 1 ? [`TASK-${String(n - 1).padStart(3, '0')}`] : [],
+					labels:             [],
+				});
+			}
+		}
+	}
+
+	// Attach verification criteria to last non-git issue
+	if (verifyLines.length) {
+		const lastReal = [...issues].reverse().find(i => !i.labels.includes('git'));
+		if (lastReal) {
+			lastReal.acceptanceCriteria = [...(lastReal.acceptanceCriteria ?? []), ...verifyLines];
+		}
+	}
+
+	if (!issues.length) { return null; }
+
+	return { project, description, version: '1.0.0', issues };
+}
+
+function detectEpic(title: string): string {
+	const t = title.toLowerCase();
+	if (/auth|jwt|login|token|secret|cors/.test(t))      { return 'Auth'; }
+	if (/test|verify|verif|coverage|spec/.test(t))        { return 'Testing'; }
+	if (/doc|readme|deploy|guide|instruc/.test(t))        { return 'Docs'; }
+	if (/docker|container|image|build/.test(t))           { return 'Infrastructure'; }
+	if (/database|db|model|migration|schema/.test(t))     { return 'Database'; }
+	if (/api|endpoint|route|handler|middleware/.test(t))  { return 'Backend'; }
+	if (/ui|frontend|component|page|css|style/.test(t))   { return 'Frontend'; }
+	if (/config|setup|init|install|env/.test(t))          { return 'Setup'; }
+	return 'Core';
+}
+
+// ── ID generator ─────────────────────────────────────────────────────────────
+
+function generateNextId(existingIds: string[]): string {
+	// Detect format from existing IDs: US-001, ISSUE-001, STEP-001, TASK-001
+	const patterns = [
+		{ re: /^(US)-(\d+)$/, prefix: 'US' },
+		{ re: /^(ISSUE)-(\d+)$/, prefix: 'ISSUE' },
+		{ re: /^(STEP)-(\d+)$/, prefix: 'STEP' },
+		{ re: /^(TASK)-(\d+)$/, prefix: 'TASK' },
+	];
+
+	for (const { re, prefix } of patterns) {
+		const nums = existingIds
+			.map(id => { const m = id.match(re); return m ? parseInt(m[2], 10) : null; })
+			.filter((n): n is number => n !== null);
+		if (nums.length > 0) {
+			const next = Math.max(...nums) + 1;
+			return `${prefix}-${String(next).padStart(3, '0')}`;
+		}
+	}
+
+	// Fallback: ISSUE-NNN
+	const fallbackNums = existingIds
+		.map(id => { const m = id.match(/(\d+)$/); return m ? parseInt(m[1], 10) : null; })
+		.filter((n): n is number => n !== null);
+	const next = fallbackNums.length > 0 ? Math.max(...fallbackNums) + 1 : 1;
+	return `ISSUE-${String(next).padStart(3, '0')}`;
+}
+
+// ── Add from Chat prompt ──────────────────────────────────────────────────────
+
+function buildAddFromChatPrompt(prd: Prd | null, prdPath: string): string {
+	const projectName = prd?.project ?? 'this project';
+	const existingIds = (prd?.issues ?? []).map(i => i.id);
+	const nextId      = generateNextId(existingIds);
+	const epics       = prd ? [...new Set(prd.issues.map(i => i.epic || 'General'))].join(', ') : '';
+
+	return [
+		`I want to add one or more new issues to the prd.json for **${projectName}**.`,
+		``,
+		`Existing epics: ${epics || 'none yet'}`,
+		`Next available ID: ${nextId}`,
+		`prd.json location: \`${prdPath.replace(/\\/g, '/')}\``,
+		``,
+		`Please ask me what I want to add (in natural language), then:`,
+		`1. Break it down into one or more concrete issues`,
+		`2. For each issue generate a JSON object following this schema:`,
+		`   - id: string starting from ${nextId} (increment for each new issue)`,
+		`   - title: short descriptive title`,
+		`   - description: what needs to be done`,
+		`   - epic: pick from existing epics or create a new one`,
+		`   - priority: "P0" | "P1" | "P2" | "P3"`,
+		`   - status: always "todo"`,
+		`   - acceptanceCriteria: array of strings`,
+		`   - dependencies: array of existing issue IDs this depends on (empty if none)`,
+		`   - labels: array of strings`,
+		`3. Add the new issue(s) to the \`issues\` array (or \`userStories\` if that key exists) in \`${prdPath.replace(/\\/g, '/')}\``,
+		`4. Do NOT modify any existing issues — only append`,
+		`5. Confirm what was added with a brief summary`,
 	].join('\n');
 }

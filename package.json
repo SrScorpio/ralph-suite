@@ -2,7 +2,7 @@
   "name": "ralph-suite",
   "displayName": "Ralph Suite",
   "description": "Autonomous AI task runner with Kanban board, memory and multi-engine support",
-  "version": "0.1.0",
+  "version": "1.2.0",
   "publisher": "ralph-suite",
   "engines": { "vscode": "^1.90.0" },
   "categories": ["Other"],
@@ -58,6 +58,11 @@
           "type": "boolean",
           "default": false,
           "description": "Automatically start next task when one completes"
+        },
+        "ralph-suite.freshContext": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open a new chat window for each task (fresh context, no history bleeding between tasks). Recommended: true."
         },
         "ralph-suite.prdPath": {
           "type": "string",
