@@ -4,3 +4,6 @@ dist/
 .vscode-test/
 out/
 *.js.map
+
+# Ralph Suite runtime state (do not commit)
+.ralph/
