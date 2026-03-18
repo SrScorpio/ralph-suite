@@ -1,0 +1,103 @@
+{
+  "name": "ralph-suite",
+  "displayName": "Ralph Suite",
+  "description": "Autonomous AI task runner with Kanban board, memory and multi-engine support",
+  "version": "0.1.0",
+  "publisher": "ralph-suite",
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "icon": "images/icon.png",
+  "contributes": {
+    "commands": [
+      { "command": "ralph-suite.openKanban",   "title": "Ralph: Open Board" },
+      { "command": "ralph-suite.initProject",  "title": "Ralph: Init Project" },
+      { "command": "ralph-suite.runTask",      "title": "Ralph: Run Next Task" },
+      { "command": "ralph-suite.openSettings", "title": "Ralph: Settings" }
+    ],
+    "keybindings": [
+      {
+        "command": "ralph-suite.openKanban",
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        { "command": "ralph-suite.openKanban" },
+        { "command": "ralph-suite.initProject" },
+        { "command": "ralph-suite.runTask" },
+        { "command": "ralph-suite.openSettings" }
+      ],
+      "editor/context": [
+        {
+          "command": "ralph-suite.openKanban",
+          "when": "resourceFilename == prd.json",
+          "group": "ralph"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Ralph Suite",
+      "properties": {
+        "ralph-suite.engine": {
+          "type": "string",
+          "enum": ["copilot", "claude", "opencode"],
+          "default": "copilot",
+          "description": "AI engine to use for task execution"
+        },
+        "ralph-suite.maxLoops": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Max tasks per run session"
+        },
+        "ralph-suite.autoRun": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically start next task when one completes"
+        },
+        "ralph-suite.prdPath": {
+          "type": "string",
+          "default": "prd.json",
+          "description": "Path to prd.json relative to workspace root"
+        },
+        "ralph-suite.memoriesPath": {
+          "type": "string",
+          "default": ".agent/memories.md",
+          "description": "Path to project memories file"
+        },
+        "ralph-suite.guardrails": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [
+            "Never modify prd.json",
+            "Never delete files without confirmation",
+            "Always include tests for new features"
+          ],
+          "description": "Rules injected into every task prompt"
+        },
+        "ralph-suite.boundaries": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Paths the agent must never touch (e.g. legacy/**, *.lock)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^2.24.0",
+    "typescript": "^5.4.0"
+  }
+}

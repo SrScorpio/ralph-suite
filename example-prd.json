@@ -1,0 +1,81 @@
+{
+  "project": "Mi Proyecto",
+  "description": "Descripción del proyecto",
+  "version": "1.0.0",
+  "issues": [
+    {
+      "id": "ISSUE-001",
+      "title": "Configurar estructura base del proyecto",
+      "description": "Crear la estructura inicial de directorios, configuración y README",
+      "epic": "Setup",
+      "priority": "P0",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Estructura de carpetas creada en src/",
+        "README.md con instrucciones básicas",
+        "Configuración de entorno (.env.example)"
+      ],
+      "dependencies": [],
+      "labels": ["setup", "infrastructure"]
+    },
+    {
+      "id": "ISSUE-002",
+      "title": "Git commit: setup inicial",
+      "description": "Stage all changes and commit with message: 'chore: initial project structure'",
+      "epic": "Setup",
+      "priority": "P0",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Todos los archivos staged",
+        "Commit con mensaje descriptivo en formato conventional commits"
+      ],
+      "dependencies": ["ISSUE-001"],
+      "labels": ["git"]
+    },
+    {
+      "id": "ISSUE-003",
+      "title": "Implementar feature principal",
+      "description": "Desarrollar la funcionalidad core del proyecto según los requisitos",
+      "epic": "Core",
+      "priority": "P1",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Funcionalidad implementada y funcionando",
+        "Tests unitarios incluidos",
+        "Documentación actualizada"
+      ],
+      "dependencies": ["ISSUE-001"],
+      "labels": ["feature"]
+    },
+    {
+      "id": "ISSUE-004",
+      "title": "Añadir validaciones y manejo de errores",
+      "description": "Implementar validación exhaustiva de inputs y mensajes de error claros",
+      "epic": "Core",
+      "priority": "P2",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Validación de todos los inputs críticos",
+        "Mensajes de error informativos",
+        "Logging estructurado"
+      ],
+      "dependencies": ["ISSUE-003"],
+      "labels": ["quality"]
+    },
+    {
+      "id": "ISSUE-005",
+      "title": "Tests de integración",
+      "description": "Suite completa de tests de integración con cobertura >80%",
+      "epic": "Quality",
+      "priority": "P2",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Tests de integración para flujos principales",
+        "Cobertura de código superior al 80%",
+        "CI/CD pipeline configurado"
+      ],
+      "dependencies": ["ISSUE-003"],
+      "labels": ["testing"]
+    }
+  ]
+}
