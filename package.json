@@ -2,7 +2,7 @@
   "name": "ralph-suite",
   "displayName": "Ralph Suite",
   "description": "Autonomous AI task runner with Kanban board, memory and multi-engine support",
-  "version": "1.4.0",
+  "version": "1.5.1",
   "publisher": "ralph-suite",
   "engines": {
     "vscode": "^1.90.0"

@@ -342,9 +342,43 @@ export class KanbanPanel {
 				break;
 
 			case 'showAddIssue':
-				// Handled entirely in the webview JS — just needs the send() call
-				// which opens the modal client-side. Nothing to do here.
+				// Post back to webview to open the modal client-side
+				this.panel.webview.postMessage({ type: 'openAddModal' });
 				break;
+
+			case 'showEditIssue': {
+				// Send full issue data to webview for the edit modal
+				const prdE = PrdManager.load(this.root);
+				const issue = prdE?.issues.find(i => i.id === msg.id);
+				if (issue) {
+					this.panel.webview.postMessage({ type: 'openEditModal', issue });
+				}
+				break;
+			}
+
+			case 'editIssue': {
+				// Save edited issue back to prd.json
+				const { id, fields } = msg;
+				if (!id || !fields) { break; }
+				const prdPathE = path.join(this.root, 'prd.json');
+				if (!fs.existsSync(prdPathE)) { break; }
+				try {
+					const raw   = JSON.parse(fs.readFileSync(prdPathE, 'utf-8'));
+					const items = raw.issues ?? raw.userStories ?? [];
+					const idx   = items.findIndex((i: any) => i.id === id);
+					if (idx === -1) { break; }
+					// Merge fields — only update what was sent
+					items[idx] = { ...items[idx], ...fields };
+					if (raw.issues)      { raw.issues = items; }
+					else if (raw.userStories) { raw.userStories = items; }
+					fs.writeFileSync(prdPathE, JSON.stringify(raw, null, 2), 'utf-8');
+					this.render();
+					KanbanPanel.output?.appendLine(`[Board] Edited issue ${id}`);
+				} catch (e) {
+					KanbanPanel.output?.appendLine(`[Board] Edit failed: ${e}`);
+				}
+				break;
+			}
 
 			case 'addIssue': {
 				const prd = PrdManager.load(this.root);

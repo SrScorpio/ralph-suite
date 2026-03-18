@@ -346,12 +346,114 @@ async function initProject(output: vscode.OutputChannel) {
 }
 
 function buildInitPrompt(goal: string, workspaceRoot: string): string {
-	return `Analyze this workspace and generate a prd.json file at the workspace root.
+	const cfg          = vscode.workspace.getConfiguration('ralph-suite');
+	const guardrails   = cfg.get<string[]>('guardrails', []);
+	const checkpoints  = cfg.get<string[]>('agentCheckpoints', []);
 
-Goal: ${goal}
-Workspace: ${workspaceRoot}
+	const guardrailList   = guardrails.map(g => `- ${g}`).join('\n') || '- Never modify prd.json\n- Never delete files without confirmation';
+	const checkpointList  = checkpoints.map((c, i) => `${i + 1}. ${c}`).join('\n') || '1. Delete files\n2. Modify database schemas\n3. Change security config';
 
-Generate the file following EXACTLY this schema:
+	return `You are a senior software architect helping set up a new project with the Ralph Suite workflow.
+
+The user wants to build: **${goal}**
+
+## Your job
+
+1. **Ask clarifying questions** to understand:
+   - What exactly needs to be built (features, users, scope)
+   - Preferred tech stack (or propose one with justification)
+   - Any constraints (budget, existing systems, deployment target)
+   - Security requirements (auth, secrets, external APIs)
+
+2. **Once you have enough context**, generate ALL of these files in one go:
+
+---
+
+### File 1: \`AGENTS.md\` (at workspace root)
+
+Use EXACTLY this structure:
+
+\`\`\`markdown
+# AGENTS.md — Project Agent Manual
+
+> **Project:** [project name]
+> **Stack:** [tech stack]
+> **Generated:** [date]
+
+## Role
+You are a [role] working on [project description].
+
+**Tech Stack:**
+- [stack items]
+
+## Rules (always follow)
+${guardrailList}
+
+## Checkpoints (stop and ask before doing these)
+${checkpointList}
+
+## Response style
+Code first, brief justification after. No padding, no follow-up questions unless the task requires it.
+
+## Before starting any task, read:
+- \`.agent/memories.md\` — accumulated project knowledge
+- \`plans/arquitectura.md\` — architecture decisions
+- \`plans/seguridad.md\` — security requirements
+- \`plans/decisiones.md\` — decision log
+
+## Completion protocol
+Write both signals when done:
+1. \`completed\` → \`.ralph/task-<ID>-status\`
+2. \`NOTA: <one line summary>\` → \`.ralph/task-<ID>-note\`
+Then stop and wait. Do not ask follow-up questions.
+
+## Testing
+- Run existing tests before marking any task completed
+- New features require tests
+- Do not break passing tests
+\`\`\`
+
+---
+
+### File 2: \`.github/copilot-instructions.md\`
+
+Brief — just references AGENTS.md and lists the 3 most critical rules for this project.
+
+---
+
+### File 3: \`plans/arquitectura.md\`
+
+Document the actual architecture decisions made during your conversation:
+- Why this stack was chosen
+- Project structure
+- Data flow
+- External services and why
+- Conventions (naming, error handling, config)
+- What NOT to change without discussion
+
+---
+
+### File 4: \`plans/seguridad.md\`
+
+Security rules specific to this project:
+- Secrets management (list the env variables needed)
+- Auth mechanism chosen and why
+- Input validation rules
+- CORS config if applicable
+- Checkpoints for security-sensitive operations
+
+---
+
+### File 5: \`plans/decisiones.md\`
+
+Start with ADR-001 for the stack choice, add one ADR per significant decision made during the conversation.
+Format: Context → Decision → Consequences → Alternatives rejected.
+
+---
+
+### File 6: \`prd.json\` (at workspace root)
+
+Generate the initial backlog based on what you now know about the project:
 
 \`\`\`json
 {
@@ -361,7 +463,7 @@ Generate the file following EXACTLY this schema:
   "issues": [
     {
       "id": "ISSUE-001",
-      "title": "Setup base structure",
+      "title": "Short title",
       "description": "What to implement",
       "epic": "Setup",
       "priority": "P0",
@@ -374,13 +476,22 @@ Generate the file following EXACTLY this schema:
 }
 \`\`\`
 
-Rules:
-- id format: ISSUE-NNN (sequential)
+Rules for prd.json:
+- id: ISSUE-NNN sequential
 - priority: P0 (critical) > P1 (high) > P2 (medium) > P3 (low)
-- status always "todo" for new issues
+- status always "todo"
 - After each feature issue, add a git commit issue
-- All paths must be relative and portable
-- Actually CREATE the file at ${workspaceRoot}/prd.json — do not just show content`;
+- Group by epic
+- All paths relative and portable
+- Actually CREATE the file at ${workspaceRoot}/prd.json
+
+---
+
+## Important
+- Start by asking questions — do NOT generate files until you understand the project
+- Generate ALL 6 files in one go once you have enough context
+- The files should reflect the REAL project, not generic templates
+- Workspace root: \`${workspaceRoot}\``;
 }
 
 // ── Project Setup (AGENTS.md + plans/) ───────────────────────────────────────

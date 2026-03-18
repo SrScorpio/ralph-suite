@@ -144,10 +144,14 @@ export class RalphStateManager {
 		if (!fs.existsSync(np)) { return; }
 
 		try {
-			const raw  = fs.readFileSync(np, 'utf-8').trim();
-			const note = raw.startsWith('NOTA:')
-				? raw.slice(5).trim()
-				: raw;
+			const raw   = fs.readFileSync(np, 'utf-8').trim();
+
+			// Find NOTA: line anywhere in the file (agent may write other text too)
+			const lines = raw.split(/\r?\n/);
+			const notaLine = lines.find(l => l.trimStart().toUpperCase().startsWith('NOTA:'));
+			const note = notaLine
+				? notaLine.trimStart().slice(5).trim()   // strip "NOTA:" prefix
+				: lines[lines.length - 1].trim();         // fallback: last non-empty line
 
 			// Load existing log or create minimal one
 			const lp  = this.logPath(root, id);
@@ -207,8 +211,12 @@ export class RalphStateManager {
 
 		let content = fs.existsSync(mp) ? fs.readFileSync(mp, 'utf-8') : '# Project Memories\n\n';
 
-		const date    = new Date().toISOString().slice(0, 10);
-		const noteText = log.note || log.summary;
+		const date     = new Date().toISOString().slice(0, 10);
+		const rawNote  = log.note || log.summary || '';
+		// Strip NOTA: prefix in case it survived from old data
+		const noteText = rawNote.trimStart().toUpperCase().startsWith('NOTA:')
+			? rawNote.trimStart().slice(5).trim()
+			: rawNote.trim();
 
 		const entry = [
 			`\n## [${date}] ${log.id}: ${log.title}`,

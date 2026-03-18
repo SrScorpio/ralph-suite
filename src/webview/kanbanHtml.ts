@@ -78,7 +78,7 @@ function card(issue: Issue, log: TaskLog | null): string {
       ${logBadge}
     </div>
   </div>
-  <div class="card-title">${esc(issue.title)}</div>
+  <div class="card-title" onclick="send('showEditIssue','${issue.id}')" style="cursor:pointer" title="Click to edit">${esc(issue.title)}</div>
   ${issue.description ? `<div class="card-desc">${esc(issue.description.slice(0, 100))}${issue.description.length > 100 ? '…' : ''}</div>` : ''}
   ${noteHtml}${deps}
   <div class="card-footer">
@@ -552,11 +552,116 @@ ${prd && memories ? memoriesPanel(memories) : ''}
   </div>
 </div>
 
+<!-- Edit Issue Modal -->
+<div class="modal-overlay" id="editModal" style="display:none" onclick="if(event.target===this)closeEditModal()">
+  <div class="modal" style="width:480px">
+    <div class="modal-title">✎ Edit Issue</div>
+    <input type="hidden" id="em-id"/>
+    <div class="modal-row">
+      <label class="modal-label">Title *</label>
+      <input class="modal-input" id="em-title"/>
+    </div>
+    <div class="modal-row">
+      <label class="modal-label">Description</label>
+      <textarea class="modal-textarea" id="em-desc" style="min-height:80px"></textarea>
+    </div>
+    <div class="modal-row-2">
+      <div class="modal-row">
+        <label class="modal-label">Epic</label>
+        <input class="modal-input" id="em-epic"/>
+      </div>
+      <div class="modal-row">
+        <label class="modal-label">Priority</label>
+        <select class="modal-select" id="em-priority">
+          <option value="P0">🔴 P0 — Critical</option>
+          <option value="P1">🟠 P1 — High</option>
+          <option value="P2">🔵 P2 — Medium</option>
+          <option value="P3">⚪ P3 — Low</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-row">
+      <label class="modal-label">Acceptance Criteria <span style="opacity:.5">(one per line)</span></label>
+      <textarea class="modal-textarea" id="em-criteria" style="min-height:80px"></textarea>
+    </div>
+    <div class="modal-row-2">
+      <div class="modal-row">
+        <label class="modal-label">Labels <span style="opacity:.5">(comma-separated)</span></label>
+        <input class="modal-input" id="em-labels"/>
+      </div>
+      <div class="modal-row">
+        <label class="modal-label">Dependencies <span style="opacity:.5">(comma-separated IDs)</span></label>
+        <input class="modal-input" id="em-deps"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeEditModal()">Cancel</button>
+      <button class="btn btn-run" onclick="submitEditIssue()">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const vscode = acquireVsCodeApi();
 function send(type, id) { vscode.postMessage({ type, id }); }
 
-// ── Add Issue Modal ──────────────────────────────────────────────────────────
+// ── Listen for messages from extension (e.g. open modal from menu) ───────────
+window.addEventListener('message', e => {
+  const msg = e.data;
+  if (msg.type === 'openAddModal')  { showAddIssue(); }
+  if (msg.type === 'openEditModal') { showEditModal(msg.issue); }
+});
+
+// ── Edit Issue Modal ─────────────────────────────────────────────────────────
+function showEditModal(issue) {
+  document.getElementById('em-id').value          = issue.id ?? '';
+  document.getElementById('em-title').value       = issue.title ?? '';
+  document.getElementById('em-desc').value        = issue.description ?? '';
+  document.getElementById('em-epic').value        = issue.epic ?? '';
+  document.getElementById('em-priority').value    = issue.priority ?? 'P2';
+  document.getElementById('em-criteria').value    = (issue.acceptanceCriteria ?? []).join('\n');
+  document.getElementById('em-labels').value      = (issue.labels ?? []).join(', ');
+  document.getElementById('em-deps').value        = (issue.dependencies ?? []).join(', ');
+  document.getElementById('editModal').style.display = 'flex';
+  document.getElementById('em-title').focus();
+}
+function closeEditModal() {
+  document.getElementById('editModal').style.display = 'none';
+}
+function submitEditIssue() {
+  const id = document.getElementById('em-id').value;
+  if (!id) { return; }
+  const criteria = document.getElementById('em-criteria').value
+    .split('\n').map(l => l.trim()).filter(Boolean);
+  const labels = document.getElementById('em-labels').value
+    .split(',').map(l => l.trim()).filter(Boolean);
+  const deps = document.getElementById('em-deps').value
+    .split(',').map(l => l.trim()).filter(Boolean);
+  vscode.postMessage({
+    type: 'editIssue',
+    id,
+    fields: {
+      title:              document.getElementById('em-title').value.trim(),
+      description:        document.getElementById('em-desc').value.trim(),
+      epic:               document.getElementById('em-epic').value.trim() || undefined,
+      priority:           document.getElementById('em-priority').value,
+      acceptanceCriteria: criteria,
+      labels,
+      dependencies:       deps,
+    }
+  });
+  closeEditModal();
+}
+// Close modals on Escape, submit on Ctrl+Enter
+document.addEventListener('keydown', e => {
+  const addOpen  = document.getElementById('addModal').style.display  !== 'none';
+  const editOpen = document.getElementById('editModal').style.display !== 'none';
+  if (e.key === 'Escape') { closeModal(); closeEditModal(); }
+  if (e.key === 'Enter' && e.ctrlKey) {
+    if (addOpen)  { submitAddIssue(); }
+    if (editOpen) { submitEditIssue(); }
+  }
+});
 function showAddIssue() {
   document.getElementById('addModal').style.display = 'flex';
   document.getElementById('mi-title').focus();
@@ -588,14 +693,6 @@ function submitAddIssue() {
   });
   closeModal();
 }
-// Close modal on Escape
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeModal(); }
-  if (e.key === 'Enter' && e.ctrlKey && document.getElementById('addModal').style.display !== 'none') {
-    submitAddIssue();
-  }
-});
-
 // ── Drag & Drop (column change + same-column reorder) ─────────────────────────
 let dragId = null, dragEl = null, dragSourceCol = null;
 const ghost = document.getElementById('dragGhost');
