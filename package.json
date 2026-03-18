@@ -2,19 +2,53 @@
   "name": "ralph-suite",
   "displayName": "Ralph Suite",
   "description": "Autonomous AI task runner with Kanban board, memory and multi-engine support",
-  "version": "1.2.0",
+  "version": "1.4.0",
   "publisher": "ralph-suite",
-  "engines": { "vscode": "^1.90.0" },
-  "categories": ["Other"],
-  "activationEvents": ["onStartupFinished"],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "icon": "images/icon.png",
   "contributes": {
     "commands": [
-      { "command": "ralph-suite.openKanban",   "title": "Ralph: Open Board" },
-      { "command": "ralph-suite.initProject",  "title": "Ralph: Init Project" },
-      { "command": "ralph-suite.runTask",      "title": "Ralph: Run Next Task" },
-      { "command": "ralph-suite.openSettings", "title": "Ralph: Settings" }
+      {
+        "command": "ralph-suite.openKanban",
+        "title": "Ralph: Open Board"
+      },
+      {
+        "command": "ralph-suite.initProject",
+        "title": "Ralph: Init Project"
+      },
+      {
+        "command": "ralph-suite.runTask",
+        "title": "Ralph: Run Next Task"
+      },
+      {
+        "command": "ralph-suite.openSettings",
+        "title": "Ralph: Settings"
+      },
+      {
+        "command": "ralph-suite.showMenu",
+        "title": "Ralph: Show Menu"
+      },
+      {
+        "command": "ralph-suite.startRunner",
+        "title": "Ralph: Start Runner"
+      },
+      {
+        "command": "ralph-suite.stopRunner",
+        "title": "Ralph: Stop Runner"
+      },
+      {
+        "command": "ralph-suite.setupProject",
+        "title": "Ralph: Setup Project (AGENTS.md + plans/)"
+      }
     ],
     "keybindings": [
       {
@@ -25,10 +59,18 @@
     ],
     "menus": {
       "commandPalette": [
-        { "command": "ralph-suite.openKanban" },
-        { "command": "ralph-suite.initProject" },
-        { "command": "ralph-suite.runTask" },
-        { "command": "ralph-suite.openSettings" }
+        {
+          "command": "ralph-suite.openKanban"
+        },
+        {
+          "command": "ralph-suite.initProject"
+        },
+        {
+          "command": "ralph-suite.runTask"
+        },
+        {
+          "command": "ralph-suite.openSettings"
+        }
       ],
       "editor/context": [
         {
@@ -43,7 +85,11 @@
       "properties": {
         "ralph-suite.engine": {
           "type": "string",
-          "enum": ["copilot", "claude", "opencode"],
+          "enum": [
+            "copilot",
+            "claude",
+            "opencode"
+          ],
           "default": "copilot",
           "description": "AI engine to use for task execution"
         },
@@ -76,19 +122,89 @@
         },
         "ralph-suite.guardrails": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [
             "Never modify prd.json",
             "Never delete files without confirmation",
-            "Always include tests for new features"
+            "Always include tests for new features",
+            "Task states must be exactly: todo | inprogress | completed | blocked \u2014 never mix or invent states",
+            "When a task is finished, write the completion signal and wait for instructions \u2014 do not generate extra questions unless explicitly part of the task",
+            "Always read .agent/memories.md before starting any task to load project context",
+            "Never commit secrets, API keys, tokens or passwords \u2014 use environment variables",
+            "Always validate and sanitize user inputs \u2014 never trust raw input",
+            "Run existing tests before marking a task as completed \u2014 do not break passing tests",
+            "Security checkpoints required for: authentication changes, file deletions, DB schema changes, dependency upgrades",
+            "All new code must follow the conventions already present in the codebase \u2014 check existing patterns before creating new ones",
+            "Log important decisions and architectural choices in .agent/memories.md",
+            "Never use placeholders or TODO comments in production code \u2014 implement or leave existing code",
+            "If blocked, write a clear explanation in the note signal \u2014 do not silently timeout"
           ],
           "description": "Rules injected into every task prompt"
         },
         "ralph-suite.boundaries": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Paths the agent must never touch (e.g. legacy/**, *.lock)"
+        },
+        "ralph-suite.taskTimeoutMs": {
+          "type": "number",
+          "default": 600000,
+          "minimum": 30000,
+          "description": "Maximum time (ms) to wait for the agent to complete a task before timing out. Default: 10 minutes."
+        },
+        "ralph-suite.taskRetries": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 5,
+          "description": "Number of times to retry a task after timeout before marking it as failed. Default: 1."
+        },
+        "ralph-suite.minWaitMs": {
+          "type": "number",
+          "default": 15000,
+          "minimum": 0,
+          "description": "Minimum time (ms) to wait before starting to poll for task completion. Default: 15 seconds."
+        },
+        "ralph-suite.pollIntervalMs": {
+          "type": "number",
+          "default": 5000,
+          "minimum": 1000,
+          "description": "How often (ms) to check if the agent has completed a task. Default: 5 seconds."
+        },
+        "ralph-suite.agentRole": {
+          "type": "string",
+          "default": "Senior Software Engineer",
+          "description": "Role of the AI agent \u2014 appears in AGENTS.md header"
+        },
+        "ralph-suite.agentStack": {
+          "type": "string",
+          "default": "",
+          "description": "Tech stack of the project (e.g. PHP 8.1, WordPress, Python 3.11, JavaScript). Used to personalise AGENTS.md."
+        },
+        "ralph-suite.agentProject": {
+          "type": "string",
+          "default": "",
+          "description": "Short project description for AGENTS.md context"
+        },
+        "ralph-suite.agentCheckpoints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "Delete files or directories",
+            "Modify database schemas or migrations",
+            "Change authentication or security configuration",
+            "Install or upgrade major dependencies",
+            "Refactor more than 500 lines of code",
+            "Change architecture documented in plans/"
+          ],
+          "description": "Actions that require a checkpoint confirmation before executing"
         }
       }
     }

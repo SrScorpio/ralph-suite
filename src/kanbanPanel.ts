@@ -92,6 +92,13 @@ export class KanbanPanel {
 		}
 	}
 
+	// Send a message to the webview from outside (e.g. quick menu)
+	static sendMessage(type: string, id?: string) {
+		if (KanbanPanel.current && !KanbanPanel.current.disposed) {
+			KanbanPanel.current.handleMessage({ type, id });
+		}
+	}
+
 	private render() {
 		if (this.disposed) { return; }
 		try {
@@ -453,6 +460,10 @@ export class KanbanPanel {
 				this.render();
 				break;
 			}
+
+			case 'setupProject':
+				await vscode.commands.executeCommand('ralph-suite.setupProject');
+				break;
 
 			case 'openMemories': {
 				const p = path.join(this.root, '.agent', 'memories.md');

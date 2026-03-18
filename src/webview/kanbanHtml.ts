@@ -249,6 +249,7 @@ function statsBar(prd: Prd, cfg: BoardConfig): string {
     <button class="btn btn-sm" onclick="send('openPrd')" title="Edit prd.json">📄 PRD</button>
     <button class="btn btn-sm" onclick="send('openMemories')">🧠 Memory</button>
     <button class="btn btn-sm" onclick="send('importPlan')" title="Import or append from Plan agent markdown">⬇ Plan</button>
+    <button class="btn btn-sm btn-setup" onclick="send('setupProject')" title="Generate/regenerate AGENTS.md and plans/">⚙ Agents</button>
     <button class="btn btn-sm" onclick="send('openSettings')">⚙</button>
     <button class="btn btn-sm" onclick="send('refresh')">↻</button>
   </div>
@@ -363,6 +364,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--vscode-font-family
 .btn-github:hover{background:rgba(139,148,158,.2)!important;color:var(--text)!important}
 .btn-add{background:rgba(63,185,80,.1);border-color:rgba(63,185,80,.35);color:var(--green)}
 .btn-add:hover{background:rgba(63,185,80,.2)!important}
+.btn-setup{background:rgba(227,179,65,.08);border-color:rgba(227,179,65,.3);color:var(--amber)}
+.btn-setup:hover{background:rgba(227,179,65,.18)!important}
 /* ADD ISSUE MODAL */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;display:flex;align-items:center;justify-content:center}
 .modal{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px 22px;width:420px;max-width:95vw;display:flex;flex-direction:column;gap:12px}
