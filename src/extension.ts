@@ -8,19 +8,21 @@ import { PrdManager } from './prdManager';
 export function activate(context: vscode.ExtensionContext) {
 	const output = vscode.window.createOutputChannel('Ralph Suite');
 	context.subscriptions.push(output);
+	output.appendLine('[Ralph] ===== ACTIVATING v1.6.3 =====');
+	output.show(); // Force show output on activation
 
-	// Status bar — click opens quick menu
 	const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
 	statusBar.text = '$(layout-panel) Ralph';
-	statusBar.tooltip = 'Ralph Suite — click for quick menu';
+	statusBar.tooltip = 'Ralph Suite';
 	statusBar.command = 'ralph-suite.showMenu';
 	statusBar.show();
 	context.subscriptions.push(statusBar);
 
+	// Register ALL commands
 	context.subscriptions.push(
 
-		// ── Quick menu ───────────────────────────────────────────────────────
 		vscode.commands.registerCommand('ralph-suite.showMenu', async () => {
+			output.appendLine('[Ralph] showMenu triggered');
 			const root = getWorkspaceRoot();
 			const prd  = root ? PrdManager.load(root) : null;
 			const done  = prd ? prd.issues.filter(i => i.status === 'completed').length : 0;
@@ -45,7 +47,6 @@ export function activate(context: vscode.ExtensionContext) {
 			});
 			if (!pick) { return; }
 
-			// Actions that need board open first
 			const boardActions: Record<string, string> = {
 				'$(add)  Add Issue': 'showAddIssue',
 				'$(file)  Open PRD': 'openPrd',
@@ -71,8 +72,8 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		}),
 
-		// ── Board ─────────────────────────────────────────────────────────────
 		vscode.commands.registerCommand('ralph-suite.openKanban', () => {
+			output.appendLine('[Ralph] openKanban triggered');
 			const root = getWorkspaceRoot();
 			if (!root) { vscode.window.showErrorMessage('No workspace open.'); return; }
 			KanbanPanel.createOrShow(context.extensionUri, root, output);
@@ -86,38 +87,38 @@ export function activate(context: vscode.ExtensionContext) {
 			KanbanPanel.sendMessage('stopRunner');
 		}),
 
-		// ── Project ───────────────────────────────────────────────────────────
 		vscode.commands.registerCommand('ralph-suite.setupProject', () => {
-			setupProject(output);
+			output.appendLine('[Ralph] setupProject triggered');
+			setupProject(root => root, output);
 		}),
 
 		vscode.commands.registerCommand('ralph-suite.initProject', () => {
-			initProject(output);
+			output.appendLine('[Ralph] initProject triggered');
+			const root = getWorkspaceRoot();
+			if (!root) { vscode.window.showErrorMessage('No workspace open.'); return; }
+			initProject(root, output);
 		}),
 
 		vscode.commands.registerCommand('ralph-suite.openSettings', () => {
 			vscode.commands.executeCommand('workbench.action.openSettings', 'ralph-suite');
 		}),
 
-		// ── Task execution ────────────────────────────────────────────────────
 		vscode.commands.registerCommand('ralph-suite.runTask', async (taskId?: string) => {
+			output.appendLine(`[Ralph] runTask triggered: ${taskId ?? 'auto'}`);
 			const root = getWorkspaceRoot();
 			if (!root) { return; }
 			const prd = PrdManager.load(root);
 			if (!prd) { vscode.window.showErrorMessage('No prd.json found.'); return; }
-
 			const task = taskId
 				? prd.issues.find(i => i.id === taskId)
 				: PrdManager.nextPending(prd, root);
 			if (!task) { vscode.window.showInformationMessage('No pending tasks.'); return; }
-
 			const cfg          = vscode.workspace.getConfiguration('ralph-suite');
 			const prompt       = buildPrompt(task, prd, root);
 			const freshContext = cfg.get<boolean>('freshContext', true);
 			const minWaitMs    = cfg.get<number>('minWaitMs', 15000);
 			const timeoutMs    = cfg.get<number>('taskTimeoutMs', 600000);
 			const retries      = cfg.get<number>('taskRetries', 1);
-
 			await runTaskWithRetry(task, prompt, root, freshContext, minWaitMs, timeoutMs, retries, output);
 		}),
 
@@ -136,100 +137,22 @@ export function activate(context: vscode.ExtensionContext) {
 		})
 	);
 
-	// Watch prd.json for external changes
-	const watcher = vscode.workspace.createFileSystemWatcher('**/prd.json');
-	watcher.onDidChange(() => KanbanPanel.refresh());
-	watcher.onDidCreate(() => KanbanPanel.refresh());
-	context.subscriptions.push(watcher);
+	// File watchers
+	const workspaceRoot = getWorkspaceRoot();
+	if (workspaceRoot) {
+		const prdWatcher = vscode.workspace.createFileSystemWatcher(
+			new vscode.RelativePattern(workspaceRoot, 'prd.json')
+		);
+		prdWatcher.onDidChange(() => { output.appendLine('[Ralph] prd.json changed'); KanbanPanel.refresh(); });
+		prdWatcher.onDidCreate(() => { output.appendLine('[Ralph] prd.json created'); KanbanPanel.refresh(); });
+		prdWatcher.onDidDelete(() => KanbanPanel.refresh());
+		context.subscriptions.push(prdWatcher);
+	}
 
-	output.appendLine('Ralph Suite activated.');
+	output.appendLine('[Ralph] ===== ACTIVATION COMPLETE =====');
 }
 
 export function deactivate() {}
-
-// ── Task execution with timeout + retry ──────────────────────────────────────
-
-async function runTaskWithRetry(
-	task: any,
-	prompt: string,
-	root: string,
-	freshContext: boolean,
-	minWaitMs: number,
-	timeoutMs: number,
-	retries: number,
-	output: vscode.OutputChannel
-): Promise<void> {
-	const pollMs = vscode.workspace.getConfiguration('ralph-suite').get<number>('pollIntervalMs', 5000);
-
-	for (let attempt = 1; attempt <= retries + 1; attempt++) {
-		if (attempt > 1) {
-			output.appendLine(`[Ralph] Retrying ${task.id} (attempt ${attempt}/${retries + 1})...`);
-			vscode.window.showInformationMessage(`Ralph: retrying ${task.id} (attempt ${attempt})`);
-		}
-
-		try {
-			if (freshContext) {
-				await vscode.commands.executeCommand('workbench.action.chat.newChat');
-				await sleep(400);
-			}
-			await vscode.commands.executeCommand('workbench.action.chat.open', {
-				query: prompt, isPartialQuery: false
-			});
-		} catch {
-			await vscode.env.clipboard.writeText(prompt);
-			vscode.window.showInformationMessage('Prompt copied to clipboard — paste in Chat.');
-			return;
-		}
-
-		RalphStateManager.setInProgress(root, task.id);
-		KanbanPanel.refresh();
-		output.appendLine(`[Ralph] Task ${task.id} started${freshContext ? ' (fresh context)' : ''} — waiting min ${Math.round(minWaitMs / 1000)}s`);
-
-		// Wait minimum time before polling
-		await sleep(minWaitMs);
-
-		// Poll until completed or timeout
-		const startedAt = Date.now();
-		let completed   = false;
-
-		while (Date.now() - startedAt < timeoutMs - minWaitMs) {
-			const status = RalphStateManager.getStatus(root, task.id);
-			if (status === 'completed') {
-				completed = true;
-				output.appendLine(`[Ralph] ✓ Task ${task.id} completed (${Math.round((Date.now() - startedAt + minWaitMs) / 1000)}s)`);
-				break;
-			}
-			const elapsed = Math.round((Date.now() - startedAt + minWaitMs) / 1000);
-			const remaining = Math.round((timeoutMs - (Date.now() - startedAt)) / 1000);
-			output.appendLine(`[Ralph] ⏳ ${task.id} still running… ${elapsed}s elapsed, ${remaining}s remaining`);
-			await sleep(pollMs);
-		}
-
-		if (completed) { return; }
-
-		// Timed out
-		output.appendLine(`[Ralph] ⚠ Task ${task.id} timed out after ${Math.round(timeoutMs / 1000)}s`);
-		if (attempt <= retries) {
-			// Reset status so retry starts clean
-			RalphStateManager.reset(root, task.id);
-			KanbanPanel.refresh();
-		} else {
-			// All retries exhausted — mark as failed
-			RalphStateManager.setFailed(root, task.id, `Timed out after ${retries + 1} attempt(s)`);
-			KanbanPanel.refresh();
-			vscode.window.showWarningMessage(
-				`Ralph: task ${task.id} timed out after ${retries + 1} attempt(s). Check the output channel for details.`,
-				'Open Output'
-			).then(action => {
-				if (action === 'Open Output') { output.show(); }
-			});
-		}
-	}
-}
-
-function sleep(ms: number): Promise<void> {
-	return new Promise(r => setTimeout(r, ms));
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -237,55 +160,7 @@ function getWorkspaceRoot(): string | undefined {
 	return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 }
 
-function buildPrompt(task: any, prd: any, workspaceRoot: string): string {
-	const memory = loadMemory(workspaceRoot);
-	const cfg    = vscode.workspace.getConfiguration('ralph-suite');
-	const guardrails: string[] = cfg.get('guardrails', []);
-	const boundaries: string[] = cfg.get('boundaries', []);
-
-	const ralphDir   = path.join(workspaceRoot, '.ralph').replace(/\\/g, '/');
-	const statusFile = `${ralphDir}/task-${task.id}-status`;
-	const noteFile   = `${ralphDir}/task-${task.id}-note`;
-
-	const lines = [
-		memory ? `## Project Memory\n${memory}\n` : '',
-		`## Task: ${task.id} — ${task.title}`,
-		`**Epic:** ${task.epic || 'General'}`,
-		`**Priority:** ${task.priority}`,
-		`**Description:** ${task.description}`,
-		'',
-		'**Acceptance Criteria:**',
-		...(task.acceptanceCriteria || []).map((ac: string, i: number) => `  ${i + 1}. ${ac}`),
-		task.dependencies?.length ? `\n**Depends on:** ${task.dependencies.join(', ')}` : '',
-		guardrails.length ? `\n**Rules (follow always):**\n${guardrails.map((g: string) => `- ${g}`).join('\n')}` : '',
-		boundaries.length ? `\n**Never touch these paths:**\n${boundaries.map((b: string) => `- ${b}`).join('\n')}` : '',
-		'',
-		'---',
-		'Execute this task directly. Make actual code changes. Do not ask questions.',
-		'If something partially fails, keep the passing parts.',
-		'',
-		'⚠️ Do NOT modify prd.json.',
-		'',
-		'━━━ COMPLETION SIGNALS (REQUIRED — both) ━━━',
-		`1. Write \`completed\` to: ${statusFile}`,
-		`2. Write a single line to: ${noteFile}`,
-		`   Format exactly: NOTA: <one line summary of what was done>`,
-		`   Example: NOTA: Created runpod/requirements.txt with pinned ultralytics==8.2.0`,
-		'Do NOT skip either step.',
-	].filter(Boolean);
-	return lines.join('\n');
-}
-
-function loadMemory(root: string): string | null {
-	const p = path.join(root, '.agent', 'memories.md');
-	if (!fs.existsSync(p)) { return null; }
-	return fs.readFileSync(p, 'utf-8').trim() || null;
-}
-
-async function initProject(output: vscode.OutputChannel) {
-	const root = getWorkspaceRoot();
-	if (!root) { vscode.window.showErrorMessage('No workspace open.'); return; }
-
+async function initProject(root: string, output: vscode.OutputChannel) {
 	const prdPath  = path.join(root, 'prd.json');
 	const ralphDir = path.join(root, '.ralph');
 
@@ -309,7 +184,6 @@ async function initProject(output: vscode.OutputChannel) {
 				for (const f of fs.readdirSync(ralphDir)) {
 					try { fs.unlinkSync(path.join(ralphDir, f)); } catch { /**/ }
 				}
-				output.appendLine('[Ralph] Cleared .ralph/ before new project init');
 			}
 		}
 	}
@@ -322,191 +196,61 @@ async function initProject(output: vscode.OutputChannel) {
 	});
 	if (!goal) { return; }
 
+	// Create .agent/memories.md
 	const agentDir = path.join(root, '.agent');
 	if (!fs.existsSync(agentDir)) { fs.mkdirSync(agentDir, { recursive: true }); }
 	const memoriesPath = path.join(agentDir, 'memories.md');
 	if (!fs.existsSync(memoriesPath)) {
 		fs.writeFileSync(memoriesPath,
-			`# Project Memories\n\n> Persistent context across sessions.\n\n## Project\n- Goal: ${goal}\n- Created: ${new Date().toISOString().slice(0, 10)}\n`,
+			`# Project Memories\n\n## Project\n- Goal: ${goal}\n- Created: ${new Date().toISOString().slice(0, 10)}\n`,
 			'utf-8'
 		);
 	}
 
 	const prompt = buildInitPrompt(goal, root);
+	output.appendLine(`[Ralph] Init prompt: ${prompt.length} chars`);
+
 	try {
 		await vscode.commands.executeCommand('workbench.action.chat.open', {
 			query: prompt, isPartialQuery: false
 		});
-		vscode.window.showInformationMessage('Generating prd.json via Chat — open Kanban once the file is created.');
-	} catch {
+		output.appendLine('[Ralph] Chat opened');
+	} catch (e) {
+		output.appendLine(`[Ralph] Chat failed: ${e} — copying to clipboard`);
 		await vscode.env.clipboard.writeText(prompt);
-		vscode.window.showInformationMessage('Prompt copied — paste in Chat to generate prd.json.');
+		vscode.window.showInformationMessage('Prompt copied to clipboard — paste in Chat.');
+		return;
 	}
-	output.appendLine(`[Ralph] Init project: ${goal}`);
+
+	vscode.window.showInformationMessage('Chat opened. When prd.json is created, open the board.');
+
+	// Poll for prd.json
+	const prdPath2 = path.join(root, 'prd.json');
+	let polls = 0;
+	const timer = setInterval(() => {
+		polls++;
+		if (fs.existsSync(prdPath2)) {
+			clearInterval(timer);
+			output.appendLine('[Ralph] prd.json detected!');
+			KanbanPanel.refresh();
+			vscode.window.showInformationMessage('prd.json created!', 'Open Board').then(a => {
+				if (a === 'Open Board') { vscode.commands.executeCommand('ralph-suite.openKanban'); }
+			});
+		} else if (polls >= 120) {
+			clearInterval(timer);
+			output.appendLine('[Ralph] Poll timeout — prd.json not found after 10min');
+		}
+	}, 5000);
 }
 
-function buildInitPrompt(goal: string, workspaceRoot: string): string {
-	const cfg          = vscode.workspace.getConfiguration('ralph-suite');
-	const guardrails   = cfg.get<string[]>('guardrails', []);
-	const checkpoints  = cfg.get<string[]>('agentCheckpoints', []);
-
-	const guardrailList   = guardrails.map(g => `- ${g}`).join('\n') || '- Never modify prd.json\n- Never delete files without confirmation';
-	const checkpointList  = checkpoints.map((c, i) => `${i + 1}. ${c}`).join('\n') || '1. Delete files\n2. Modify database schemas\n3. Change security config';
-
-	return `You are a senior software architect helping set up a new project with the Ralph Suite workflow.
-
-The user wants to build: **${goal}**
-
-## Your job
-
-1. **Ask clarifying questions** to understand:
-   - What exactly needs to be built (features, users, scope)
-   - Preferred tech stack (or propose one with justification)
-   - Any constraints (budget, existing systems, deployment target)
-   - Security requirements (auth, secrets, external APIs)
-
-2. **Once you have enough context**, generate ALL of these files in one go:
-
----
-
-### File 1: \`AGENTS.md\` (at workspace root)
-
-Use EXACTLY this structure:
-
-\`\`\`markdown
-# AGENTS.md — Project Agent Manual
-
-> **Project:** [project name]
-> **Stack:** [tech stack]
-> **Generated:** [date]
-
-## Role
-You are a [role] working on [project description].
-
-**Tech Stack:**
-- [stack items]
-
-## Rules (always follow)
-${guardrailList}
-
-## Checkpoints (stop and ask before doing these)
-${checkpointList}
-
-## Response style
-Code first, brief justification after. No padding, no follow-up questions unless the task requires it.
-
-## Before starting any task, read:
-- \`.agent/memories.md\` — accumulated project knowledge
-- \`plans/arquitectura.md\` — architecture decisions
-- \`plans/seguridad.md\` — security requirements
-- \`plans/decisiones.md\` — decision log
-
-## Completion protocol
-Write both signals when done:
-1. \`completed\` → \`.ralph/task-<ID>-status\`
-2. \`NOTA: <one line summary>\` → \`.ralph/task-<ID>-note\`
-Then stop and wait. Do not ask follow-up questions.
-
-## Testing
-- Run existing tests before marking any task completed
-- New features require tests
-- Do not break passing tests
-\`\`\`
-
----
-
-### File 2: \`.github/copilot-instructions.md\`
-
-Brief — just references AGENTS.md and lists the 3 most critical rules for this project.
-
----
-
-### File 3: \`plans/arquitectura.md\`
-
-Document the actual architecture decisions made during your conversation:
-- Why this stack was chosen
-- Project structure
-- Data flow
-- External services and why
-- Conventions (naming, error handling, config)
-- What NOT to change without discussion
-
----
-
-### File 4: \`plans/seguridad.md\`
-
-Security rules specific to this project:
-- Secrets management (list the env variables needed)
-- Auth mechanism chosen and why
-- Input validation rules
-- CORS config if applicable
-- Checkpoints for security-sensitive operations
-
----
-
-### File 5: \`plans/decisiones.md\`
-
-Start with ADR-001 for the stack choice, add one ADR per significant decision made during the conversation.
-Format: Context → Decision → Consequences → Alternatives rejected.
-
----
-
-### File 6: \`prd.json\` (at workspace root)
-
-Generate the initial backlog based on what you now know about the project:
-
-\`\`\`json
-{
-  "project": "ProjectName",
-  "description": "Short description",
-  "version": "1.0.0",
-  "issues": [
-    {
-      "id": "ISSUE-001",
-      "title": "Short title",
-      "description": "What to implement",
-      "epic": "Setup",
-      "priority": "P0",
-      "status": "todo",
-      "acceptanceCriteria": ["criterion 1", "criterion 2"],
-      "dependencies": [],
-      "labels": ["setup"]
-    }
-  ]
-}
-\`\`\`
-
-Rules for prd.json:
-- id: ISSUE-NNN sequential
-- priority: P0 (critical) > P1 (high) > P2 (medium) > P3 (low)
-- status always "todo"
-- After each feature issue, add a git commit issue
-- Group by epic
-- All paths relative and portable
-- Actually CREATE the file at ${workspaceRoot}/prd.json
-
----
-
-## Important
-- Start by asking questions — do NOT generate files until you understand the project
-- Generate ALL 6 files in one go once you have enough context
-- The files should reflect the REAL project, not generic templates
-- Workspace root: \`${workspaceRoot}\``;
-}
-
-// ── Project Setup (AGENTS.md + plans/) ───────────────────────────────────────
-
-export async function setupProject(output: vscode.OutputChannel) {
+async function setupProject(_getRootFn: (x: any) => any, output: vscode.OutputChannel) {
 	const root = getWorkspaceRoot();
 	if (!root) { vscode.window.showErrorMessage('No workspace open.'); return; }
 
 	const agentsPath = path.join(root, 'AGENTS.md');
-	const exists     = fs.existsSync(agentsPath);
-
-	if (exists) {
+	if (fs.existsSync(agentsPath)) {
 		const action = await vscode.window.showInformationMessage(
-			'AGENTS.md already exists. What do you want to do?',
-			'Regenerate from Settings', 'Open to edit', 'Cancel'
+			'AGENTS.md already exists.', 'Regenerate', 'Open to edit', 'Cancel'
 		);
 		if (!action || action === 'Cancel') { return; }
 		if (action === 'Open to edit') {
@@ -516,205 +260,284 @@ export async function setupProject(output: vscode.OutputChannel) {
 		}
 	}
 
-	const cfg = vscode.workspace.getConfiguration('ralph-suite');
-	let role       = cfg.get<string>('agentRole', 'Senior Software Engineer');
-	let stack      = cfg.get<string>('agentStack', '');
-	let project    = cfg.get<string>('agentProject', '');
-	const checkpoints = cfg.get<string[]>('agentCheckpoints', []);
-	const guardrails  = cfg.get<string[]>('guardrails', []);
+	const cfg          = vscode.workspace.getConfiguration('ralph-suite');
+	const role         = cfg.get<string>('agentRole', 'Senior Software Engineer');
+	const stack        = cfg.get<string>('agentStack', '');
+	const project      = cfg.get<string>('agentProject', '');
+	const checkpoints  = cfg.get<string[]>('agentCheckpoints', []);
+	const guardrails   = cfg.get<string[]>('guardrails', []);
 
-	// If key fields are empty, prompt to fill them in first
 	if (!stack || !project) {
-		const fillNow = await vscode.window.showWarningMessage(
-			'agentStack and agentProject are empty in Settings. Fill them now for a better AGENTS.md, or generate with defaults.',
+		const action = await vscode.window.showWarningMessage(
+			'agentStack and agentProject are empty. Fill them in Settings for a better AGENTS.md.',
 			'Open Settings', 'Generate anyway'
 		);
-		if (fillNow === 'Open Settings') {
+		if (action === 'Open Settings') {
 			vscode.commands.executeCommand('workbench.action.openSettings', 'ralph-suite.agentStack');
 			return;
 		}
 	}
 
-	// Generate all files
 	const plansDir = path.join(root, 'plans');
 	if (!fs.existsSync(plansDir)) { fs.mkdirSync(plansDir, { recursive: true }); }
+	const githubDir = path.join(root, '.github');
+	if (!fs.existsSync(githubDir)) { fs.mkdirSync(githubDir, { recursive: true }); }
 
 	const now = new Date().toISOString().slice(0, 10);
 
-	// 1. AGENTS.md
-	const agentsContent = buildAgentsMd(role, stack, project, checkpoints, guardrails, now);
-	fs.writeFileSync(agentsPath, agentsContent, 'utf-8');
+	fs.writeFileSync(agentsPath, buildAgentsMd(role, stack, project, checkpoints, guardrails, now), 'utf-8');
 	output.appendLine('[Setup] AGENTS.md written');
 
-	// 2. .github/copilot-instructions.md
-	const githubDir = path.join(root, '.github');
-	if (!fs.existsSync(githubDir)) { fs.mkdirSync(githubDir, { recursive: true }); }
 	const copilotInstr = path.join(githubDir, 'copilot-instructions.md');
 	if (!fs.existsSync(copilotInstr)) {
 		fs.writeFileSync(copilotInstr, buildCopilotInstructions(project, stack), 'utf-8');
 		output.appendLine('[Setup] .github/copilot-instructions.md written');
 	}
 
-	// 3. plans/ files — only create if they don't exist (never overwrite user edits)
-	const planFiles: Record<string, string> = {
+	for (const [fn, content] of Object.entries({
 		'arquitectura.md': buildArquitecturaMd(project, stack, now),
 		'seguridad.md':    buildSeguridadMd(project, now),
 		'decisiones.md':   buildDecisionesMd(project, now),
-	};
-	for (const [filename, content] of Object.entries(planFiles)) {
-		const p = path.join(plansDir, filename);
+	})) {
+		const p = path.join(plansDir, fn);
 		if (!fs.existsSync(p)) {
 			fs.writeFileSync(p, content, 'utf-8');
-			output.appendLine(`[Setup] plans/${filename} written`);
+			output.appendLine(`[Setup] plans/${fn} written`);
 		} else {
-			output.appendLine(`[Setup] plans/${filename} already exists — skipped`);
+			output.appendLine(`[Setup] plans/${fn} already exists — skipped`);
 		}
 	}
 
-	vscode.window.showInformationMessage(
-		`AGENTS.md generated. Plans created in plans/. Edit them to match your project.`,
-		'Open AGENTS.md'
-	).then(action => {
-		if (action === 'Open AGENTS.md') {
-			vscode.workspace.openTextDocument(agentsPath)
-				.then(doc => vscode.window.showTextDocument(doc));
+	vscode.window.showInformationMessage('AGENTS.md generated.', 'Open AGENTS.md').then(a => {
+		if (a === 'Open AGENTS.md') {
+			vscode.workspace.openTextDocument(agentsPath).then(doc => vscode.window.showTextDocument(doc));
 		}
 	});
 }
 
-// ── File content builders ─────────────────────────────────────────────────────
+// ── Task runner ───────────────────────────────────────────────────────────────
 
-function buildAgentsMd(
-	role: string,
-	stack: string,
-	project: string,
-	checkpoints: string[],
-	guardrails: string[],
-	date: string
-): string {
-	const stackLines = stack
-		? stack.split(',').map(s => `- ${s.trim()}`).join('\n')
-		: '- (define in ralph-suite.agentStack setting)';
+async function runTaskWithRetry(
+	task: any, prompt: string, root: string,
+	freshContext: boolean, minWaitMs: number, timeoutMs: number,
+	retries: number, output: vscode.OutputChannel
+): Promise<void> {
+	const pollMs = vscode.workspace.getConfiguration('ralph-suite').get<number>('pollIntervalMs', 5000);
 
-	const checkpointList = checkpoints.length
-		? checkpoints.map((c, i) => `${i + 1}. ${c}`).join('\n')
-		: '1. Delete files or directories\n2. Modify database schemas\n3. Change security configuration';
+	for (let attempt = 1; attempt <= retries + 1; attempt++) {
+		if (attempt > 1) {
+			output.appendLine(`[Ralph] Retry ${attempt}/${retries + 1} for ${task.id}`);
+		}
+		try {
+			if (freshContext) {
+				await vscode.commands.executeCommand('workbench.action.chat.newChat');
+				await sleep(400);
+			}
+			await vscode.commands.executeCommand('workbench.action.chat.open', { query: prompt, isPartialQuery: false });
+		} catch {
+			await vscode.env.clipboard.writeText(prompt);
+			vscode.window.showInformationMessage('Prompt copied — paste in Chat.');
+			return;
+		}
 
-	const guardrailList = guardrails.length
-		? guardrails.map(g => `- ${g}`).join('\n')
-		: '- Never modify prd.json\n- Never delete files without confirmation';
+		RalphStateManager.setInProgress(root, task.id, task.title);
+		KanbanPanel.refresh();
+		output.appendLine(`[Ralph] Task ${task.id} started — waiting ${minWaitMs / 1000}s`);
+		await sleep(minWaitMs);
+
+		const startedAt = Date.now();
+		let completed = false;
+		while (Date.now() - startedAt < timeoutMs - minWaitMs) {
+			if (RalphStateManager.getStatus(root, task.id) === 'completed') {
+				completed = true;
+				output.appendLine(`[Ralph] ✓ ${task.id} completed`);
+				break;
+			}
+			await sleep(pollMs);
+		}
+		if (completed) { return; }
+
+		output.appendLine(`[Ralph] ⚠ ${task.id} timed out`);
+		if (attempt <= retries) {
+			RalphStateManager.reset(root, task.id);
+			KanbanPanel.refresh();
+		} else {
+			RalphStateManager.setFailed(root, task.id, `Timed out after ${retries + 1} attempts`);
+			KanbanPanel.refresh();
+			vscode.window.showWarningMessage(`Ralph: ${task.id} timed out`, 'Open Output')
+				.then(a => { if (a === 'Open Output') { output.show(); } });
+		}
+	}
+}
+
+function sleep(ms: number): Promise<void> {
+	return new Promise(r => setTimeout(r, ms));
+}
+
+// ── Prompt builders ───────────────────────────────────────────────────────────
+
+function buildPrompt(task: any, prd: any, workspaceRoot: string): string {
+	const memory = loadMemory(workspaceRoot);
+	const cfg    = vscode.workspace.getConfiguration('ralph-suite');
+	const guardrails: string[] = cfg.get('guardrails', []);
+	const boundaries: string[] = cfg.get('boundaries', []);
+	const ralphDir   = path.join(workspaceRoot, '.ralph').replace(/\\/g, '/');
+	const statusFile = `${ralphDir}/task-${task.id}-status`;
+	const noteFile   = `${ralphDir}/task-${task.id}-note`;
+
+	return [
+		memory ? `## Project Memory\n${memory}\n` : '',
+		`## Task: ${task.id} — ${task.title}`,
+		`**Epic:** ${task.epic || 'General'}`,
+		`**Priority:** ${task.priority}`,
+		`**Description:** ${task.description}`,
+		'',
+		'**Acceptance Criteria:**',
+		...(task.acceptanceCriteria || []).map((ac: string, i: number) => `  ${i + 1}. ${ac}`),
+		task.dependencies?.length ? `\n**Depends on:** ${task.dependencies.join(', ')}` : '',
+		guardrails.length ? `\n**Rules:**\n${guardrails.map((g: string) => `- ${g}`).join('\n')}` : '',
+		boundaries.length ? `\n**Never touch:**\n${boundaries.map((b: string) => `- ${b}`).join('\n')}` : '',
+		'',
+		'---',
+		'Execute directly. No questions. Keep passing parts if something fails.',
+		'⚠️ Do NOT modify prd.json.',
+		'',
+		'━━━ COMPLETION SIGNALS (both required) ━━━',
+		`1. Write \`completed\` to: ${statusFile}`,
+		`2. Write \`NOTA: <summary>\` to: ${noteFile}`,
+		'Do NOT skip either step.',
+	].filter(Boolean).join('\n');
+}
+
+function buildInitPrompt(goal: string, workspaceRoot: string): string {
+	const cfg         = vscode.workspace.getConfiguration('ralph-suite');
+	const guardrails  = cfg.get<string[]>('guardrails', []);
+	const checkpoints = cfg.get<string[]>('agentCheckpoints', []);
+	const guardrailList  = guardrails.map(g => `- ${g}`).join('\n') || '- Never modify prd.json';
+	const checkpointList = checkpoints.map((c, i) => `${i + 1}. ${c}`).join('\n') || '1. Delete files\n2. Modify DB schemas';
+
+	return `You are a senior software architect helping set up a new project with the Ralph Suite workflow.
+
+The user wants to build: **${goal}**
+
+## Your job
+
+1. Ask clarifying questions to understand the project fully (stack, features, constraints, security needs)
+2. Once you have enough context, generate ALL of these files in one go:
+
+### File 1: AGENTS.md (workspace root)
+\`\`\`
+# AGENTS.md — Project Agent Manual
+> Project: [name] | Stack: [stack] | Generated: [date]
+
+## Role
+You are a Senior Software Engineer working on [project].
+**Stack:** [list]
+
+## Rules
+${guardrailList}
+
+## Checkpoints (stop and ask before these)
+${checkpointList}
+
+## Before starting any task, read:
+- .agent/memories.md
+- plans/arquitectura.md
+- plans/seguridad.md
+- plans/decisiones.md
+
+## Completion protocol
+1. Write \`completed\` to .ralph/task-<ID>-status
+2. Write \`NOTA: <summary>\` to .ralph/task-<ID>-note
+Then stop. No follow-up questions.
+\`\`\`
+
+### File 2: .github/copilot-instructions.md
+Brief — references AGENTS.md, lists 3 critical rules.
+
+### File 3: plans/arquitectura.md
+Real architecture decisions from the conversation.
+
+### File 4: plans/seguridad.md
+Security rules, secrets, auth, CORS for this project.
+
+### File 5: plans/decisiones.md
+ADR-001 for stack choice + one ADR per major decision.
+
+### File 6: prd.json (workspace root)
+\`\`\`json
+{
+  "project": "Name",
+  "description": "Short description",
+  "version": "1.0.0",
+  "issues": [{
+    "id": "ISSUE-001",
+    "title": "...",
+    "description": "...",
+    "epic": "Setup",
+    "priority": "P0",
+    "status": "todo",
+    "acceptanceCriteria": ["..."],
+    "dependencies": [],
+    "labels": []
+  }]
+}
+\`\`\`
+Rules: ISSUE-NNN ids, P0>P1>P2>P3, status always "todo", add git commit after each feature issue.
+CREATE the file at: ${workspaceRoot}/prd.json
+
+## Important
+- Start with questions — do NOT generate files until you understand the project
+- Generate ALL 6 files at once when ready
+- Workspace root: \`${workspaceRoot}\``;
+}
+
+function loadMemory(root: string): string | null {
+	const p = path.join(root, '.agent', 'memories.md');
+	if (!fs.existsSync(p)) { return null; }
+	return fs.readFileSync(p, 'utf-8').trim() || null;
+}
+
+// ── AGENTS.md builders ────────────────────────────────────────────────────────
+
+function buildAgentsMd(role: string, stack: string, project: string, checkpoints: string[], guardrails: string[], date: string): string {
+	const stackLines     = stack ? stack.split(',').map(s => `- ${s.trim()}`).join('\n') : '- (define in Settings)';
+	const checkpointList = checkpoints.length ? checkpoints.map((c, i) => `${i + 1}. ${c}`).join('\n') : '1. Delete files\n2. Modify DB schemas\n3. Change security config';
+	const guardrailList  = guardrails.length  ? guardrails.map(g => `- ${g}`).join('\n')  : '- Never modify prd.json\n- Never delete files without confirmation';
 
 	return `# AGENTS.md — Project Agent Manual
 
-> **Project:** ${project || '(define in ralph-suite.agentProject setting)'}
+> **Project:** ${project || '(define in Settings → ralph-suite.agentProject)'}
 > **Generated:** ${date} by Ralph Suite
-> **Regenerate:** Open board → ⚙ Setup Project
 
----
-
-## [R] ROLE
-
+## Role
 You are a **${role}** working on this project.
 
-**Tech Stack:**
+**Stack:**
 ${stackLines}
 
-**Expertise:** Architecture, implementation, testing, security, code quality.
-
----
-
-## [A] AUDIENCE
-
-The lead developer of this project. Assume:
-- Expert knowledge of the tech stack above
-- Familiarity with Git, testing patterns, and code conventions
-- No need to explain basic concepts — go straight to implementation
-
----
-
-## [L] LIMITS — Rules to follow always
-
+## Rules (always follow)
 ${guardrailList}
 
-### Checkpoint Protocol
-
-Before executing any of these actions, **STOP and request confirmation:**
-
+## Checkpoints (stop and ask before these)
 ${checkpointList}
 
-**Checkpoint format:**
-\`\`\`
-🛑 CHECKPOINT REQUIRED
-
-Action: [what you are about to do]
-Impact: [what gets affected]
-Risk: low / medium / high
-Rollback: [how to undo if it fails]
-
-Proceed? (y/n)
-\`\`\`
-
----
-
-## [P] PURPOSE
-
-**Working code first → brief justification after.**
-
-Response format:
-1. Direct implementation
-2. Technical justification (1–3 lines max)
-3. Additional detail only if genuinely complex
-
----
-
-## [H] HOOK — Tone & Style
-
-- **Radical honesty:** if something is inefficient, say so
-- **No padding:** skip preambles, pleasantries, and summaries of what you just did
-- If you spot technical debt, document it in \`.agent/memories.md\`
-- Never end a task with open questions unless the task explicitly asks for them
-
----
-
-## Project Context
-
-Read these files before starting work:
+## Before starting any task, read:
 - \`.agent/memories.md\` — accumulated project knowledge
 - \`plans/arquitectura.md\` — architecture decisions
 - \`plans/seguridad.md\` — security requirements
-- \`plans/decisiones.md\` — ADR log (why X was chosen over Y)
-- \`prd.json\` — current task backlog
+- \`plans/decisiones.md\` — decision log
+- \`prd.json\` — task backlog
 
----
-
-## Completion Protocol
-
-When a task is finished, write **both** signals:
-
-1. \`completed\` → \`.ralph/task-<ID>-status\`
-2. \`NOTA: <one line summary>\` → \`.ralph/task-<ID>-note\`
-
-Then **stop and wait for the next instruction.** Do not ask questions.
-
----
-
-## Security Requirements
-
-- Never hardcode secrets, tokens, or passwords — use environment variables
-- Validate and sanitize all user inputs before processing
-- Follow existing auth patterns in the codebase
-- See \`plans/seguridad.md\` for project-specific security rules
-
----
+## Completion protocol
+1. Write \`completed\` → \`.ralph/task-<ID>-status\`
+2. Write \`NOTA: <one line summary>\` → \`.ralph/task-<ID>-note\`
+Then stop and wait. Do not ask follow-up questions.
 
 ## Testing
-
-- Run existing tests before marking any task as completed
-- New features must include tests
-- Do not break passing tests — if a test fails, fix it or flag it explicitly
-- Test coverage is a quality signal, not a checkbox
-
----
+- Run existing tests before marking any task completed
+- New features require tests
+- Do not break passing tests
 
 *Generated by Ralph Suite ${date}*
 `;
@@ -722,181 +545,81 @@ Then **stop and wait for the next instruction.** Do not ask questions.
 
 function buildCopilotInstructions(project: string, stack: string): string {
 	return `# GitHub Copilot Instructions
-
-> See [AGENTS.md](../AGENTS.md) for the full agent protocol.
-
-## Quick Reference
+> See [AGENTS.md](../AGENTS.md) for the full protocol.
 
 **Project:** ${project || 'See AGENTS.md'}
 **Stack:** ${stack || 'See AGENTS.md'}
 
 ## Critical Rules
-
 1. Read \`.agent/memories.md\` before starting any task
-2. All code follows conventions already in the codebase
+2. Follow conventions already in the codebase
 3. Tests required for new features
 4. Never commit secrets — use environment variables
-5. Checkpoint before: file deletion, DB changes, security changes, major refactors
-6. Write completion signals when done — do not ask follow-up questions
-
-## Plans
-
-- \`plans/arquitectura.md\` — architecture decisions
-- \`plans/seguridad.md\` — security requirements
-- \`plans/decisiones.md\` — decision log
+5. Write completion signals when done
 `;
 }
 
 function buildArquitecturaMd(project: string, stack: string, date: string): string {
 	return `# Architecture — ${project || 'Project'}
-
 > Last updated: ${date}
-> Keep this document updated when making architectural decisions.
 
-## Overview
+## Stack
+${stack ? stack.split(',').map(s => `- ${s.trim()}`).join('\n') : '- (fill in)'}
 
-[Describe the high-level architecture here]
-
-## Tech Stack
-
-${stack ? stack.split(',').map(s => `- ${s.trim()}`).join('\n') : '- (fill in your stack)'}
-
-## Project Structure
-
+## Structure
 \`\`\`
-/
-├── (add your structure here)
+/ (add your structure)
 \`\`\`
 
-## Key Architectural Decisions
+## Key Decisions
+- [Describe architecture and why]
 
-### Structure
-- [Describe how the project is organised and why]
+## Conventions
+- Naming: [snake_case / camelCase]
+- Error handling: [describe]
+- Config/secrets: [describe]
 
-### Data Flow
-- [Describe how data moves through the system]
-
-### External Services
-- [List external APIs, services, and why they were chosen]
-
-## Patterns & Conventions
-
-- **Naming:** [snake_case / camelCase / etc.]
-- **Error handling:** [how errors are handled]
-- **Logging:** [what gets logged and where]
-- **Configuration:** [how config/secrets are managed]
-
-## What NOT to change without discussion
-
-- [List architectural decisions that are locked]
-
----
-
-*Update this file whenever the architecture changes.*
+## Locked decisions (do not change without discussion)
+- [list]
 `;
 }
 
 function buildSeguridadMd(project: string, date: string): string {
 	return `# Security — ${project || 'Project'}
-
 > Last updated: ${date}
-> The agent must read this before touching authentication, secrets, or external APIs.
 
-## Secrets Management
+## Secrets
+- Never hardcode — use environment variables
+- Document required vars:
 
-- **Never** hardcode API keys, tokens, passwords, or credentials
-- All secrets go in environment variables (e.g. \`.env\`, not committed)
-- Add secret variable names to \`.env.example\` with placeholder values
-- Document required secrets here:
+| Variable | Purpose |
+|----------|---------|
+| (add) | |
 
-| Variable | Purpose | Where to get it |
-|----------|---------|----------------|
-| (add rows) | | |
+## Auth
+- [Describe mechanism]
 
-## Authentication & Authorisation
-
-- [Describe the auth mechanism used: JWT, sessions, OAuth, etc.]
-- [List which endpoints/routes require authentication]
-- [Describe role/permission model if applicable]
-
-## Input Validation
-
-- Validate and sanitize ALL user inputs before processing
-- [List specific validation rules for critical inputs]
-
-## CORS & Headers
-
-- [Describe CORS configuration and allowed origins]
-- [List security headers in use: CSP, X-Frame-Options, etc.]
-
-## Checkpoints Required
-
-The agent must stop and ask before:
-- Changing authentication logic
-- Adding new public endpoints
-- Modifying CORS configuration
-- Changing how secrets are loaded or used
-
-## Known Vulnerabilities to Avoid
-
-- SQL/NoSQL injection → use parameterised queries
-- XSS → sanitise all output
-- Path traversal → validate file paths
-- Command injection → never execute shell commands with user input
-
----
-
-*Update when security requirements change.*
+## Checkpoints required before:
+- Changing auth logic
+- Adding public endpoints
+- Modifying CORS
+- Changing how secrets are loaded
 `;
 }
 
 function buildDecisionesMd(project: string, date: string): string {
 	return `# Decision Log — ${project || 'Project'}
 
-> Architecture Decision Records (ADRs).
-> Document WHY decisions were made, not just what was decided.
-> The agent reads this to avoid undoing intentional choices.
+## ADR-001: Project setup
+**Date:** ${date} | **Status:** Accepted
 
-## Format
-
-\`\`\`markdown
-### ADR-NNN: [Title]
-
-**Date:** YYYY-MM-DD
-**Status:** Proposed | Accepted | Deprecated
-
-**Context:** Why did this decision need to be made?
-
-**Decision:** What was decided?
+**Decision:** Use prd.json for tasks, .agent/memories.md for context, plans/ for architecture docs.
 
 **Consequences:**
-- ✅ [benefit]
-- ⚠️ [trade-off]
-
-**Alternatives considered:**
-- [Option A] — rejected because [reason]
-\`\`\`
+- ✅ Single source of truth
+- ⚠️ Requires keeping plans/ updated
 
 ---
-
-## Decisions
-
-### ADR-001: Initial project setup
-
-**Date:** ${date}
-**Status:** Accepted
-
-**Context:** Project initialised with Ralph Suite.
-
-**Decision:** Use \`prd.json\` for task tracking, \`.agent/memories.md\` for persistent context, and \`plans/\` for architectural documentation.
-
-**Consequences:**
-- ✅ Single source of truth for tasks and architecture
-- ✅ Agent has persistent context across sessions
-- ⚠️ Requires keeping plans/ updated as the project evolves
-
----
-
-*Add a new ADR every time a significant technical decision is made.*
+*Add ADR-NNN for each significant technical decision.*
 `;
 }

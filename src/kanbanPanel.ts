@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { PrdManager, Issue, Prd } from './prdManager';
 import { RalphStateManager, TaskLog } from './stateManager';
-import { getKanbanHtml, BoardConfig } from './webview/kanbanHtml';
+import { getShellHtml, getBoardContent, BoardConfig } from './webview/kanbanHtml';
 
 export class KanbanPanel {
 	public static readonly viewType = 'ralph-suite.kanban';
@@ -32,7 +32,12 @@ export class KanbanPanel {
 			this.stopRunner();
 			this.watchers.forEach(w => w.dispose());
 		});
-		this.panel.webview.onDidReceiveMessage(msg => this.handleMessage(msg));
+		this.panel.webview.onDidReceiveMessage(msg => {
+			// Fire async handler without awaiting — each message is independent
+			this.handleMessage(msg).catch(e => {
+				KanbanPanel.output?.appendLine(`[Board] Handler error for ${msg?.type}: ${e}`);
+			});
+		});
 		this.startWatchers();
 		this.render();
 	}
@@ -99,6 +104,8 @@ export class KanbanPanel {
 		}
 	}
 
+	private shellLoaded = false;
+
 	private render() {
 		if (this.disposed) { return; }
 		try {
@@ -107,13 +114,35 @@ export class KanbanPanel {
 			const logs     = this.loadLogs();
 			const cfg      = this.getBoardConfig();
 			this.panel.title = prd ? `${prd.project} — Board` : 'Ralph Board';
-			this.panel.webview.html = getKanbanHtml(prd, memories, logs, cfg);
+
+			// Load shell HTML only once — subsequent renders use postMessage
+			if (!this.shellLoaded) {
+				this.panel.webview.html = getShellHtml();
+				this.shellLoaded = true;
+				// Small delay to let the shell initialize before sending data
+				setTimeout(() => this.sendUpdate(prd, memories, logs, cfg), 100);
+			} else {
+				this.sendUpdate(prd, memories, logs, cfg);
+			}
 		} catch (e: any) {
 			if (e?.message?.includes('disposed')) {
 				this.disposed = true;
 				KanbanPanel.current = undefined;
 			} else {
 				KanbanPanel.output?.appendLine(`[Ralph] Render error: ${e?.message}`);
+			}
+		}
+	}
+
+	private sendUpdate(prd: any, memories: string | null, logs: any, cfg: BoardConfig) {
+		if (this.disposed) { return; }
+		try {
+			const html = getBoardContent(prd, memories, logs, cfg);
+			this.panel.webview.postMessage({ type: 'update', data: { html } });
+		} catch (e: any) {
+			if (e?.message?.includes('disposed')) {
+				this.disposed = true;
+				KanbanPanel.current = undefined;
 			}
 		}
 	}
@@ -227,7 +256,9 @@ export class KanbanPanel {
 					});
 					RalphStateManager.setCompleted(this.root, id, summary ?? undefined);
 				} else if (status === 'inprogress') {
-					RalphStateManager.setInProgress(this.root, id);
+					const prdIP = PrdManager.load(this.root);
+					const titleIP = prdIP?.issues.find(i => i.id === id)?.title ?? '';
+					RalphStateManager.setInProgress(this.root, id, titleIP);
 				} else if (status === 'todo') {
 					RalphStateManager.reset(this.root, id);
 				}
@@ -431,7 +462,9 @@ export class KanbanPanel {
 			}
 
 			case 'importPlan': {
+				KanbanPanel.output?.appendLine('[Board] importPlan button clicked');
 				const activeDoc = vscode.window.activeTextEditor?.document;
+				KanbanPanel.output?.appendLine(`[Board] activeDoc: ${activeDoc?.fileName ?? 'none'}`);
 				let planText: string | undefined;
 				if (activeDoc && (activeDoc.languageId === 'markdown' || activeDoc.fileName.endsWith('.md') || activeDoc.fileName.includes('.prompt'))) {
 					planText = activeDoc.getText();
@@ -524,7 +557,9 @@ export class KanbanPanel {
 				break;
 
 			case 'initProject':
+				KanbanPanel.output?.appendLine('[Board] initProject button clicked');
 				await vscode.commands.executeCommand('ralph-suite.initProject');
+				KanbanPanel.output?.appendLine('[Board] initProject command returned');
 				break;
 
 			case 'refresh':

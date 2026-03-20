@@ -1,318 +1,23 @@
-import { Prd, Issue } from '../prdManager';
-import { TaskLog } from '../stateManager';
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-const PRIORITY_DOT: Record<string, string> = {
-	P0: '#f85149', P1: '#e3b341', P2: '#58a6ff', P3: '#6e7681'
-};
-const PRIORITY_LABEL: Record<string, string> = {
-	P0: 'Critical', P1: 'High', P2: 'Medium', P3: 'Low'
-};
-const STATUS_COLS = [
-	{ id: 'todo',       label: 'To Do',      accent: '#8b949e' },
-	{ id: 'inprogress', label: 'In Progress', accent: '#58a6ff' },
-	{ id: 'completed',  label: 'Done',        accent: '#3fb950' },
-	{ id: 'blocked',    label: 'Blocked',     accent: '#f85149' },
-];
-
-export type ViewMode = 'board' | 'epic' | 'history';
-
+export interface Issue {
+	id: string; title: string; description: string; epic?: string;
+	priority: 'P0'|'P1'|'P2'|'P3'; status: 'todo'|'inprogress'|'completed'|'blocked';
+	acceptanceCriteria: string[]; dependencies: string[]; labels: string[];
+}
+export interface Prd { project: string; description: string; version: string; issues: Issue[]; }
+export interface TaskLog {
+	id: string; title: string; status: string; startedAt: string;
+	completedAt?: string; durationMin?: number; note?: string; summary?: string;
+}
 export interface BoardConfig {
-	autoRun:    boolean;
-	maxLoops:   number;
-	guardrails: string[];
-	boundaries: string[];
-	view:       ViewMode;
+	autoRun: boolean; maxLoops: number; guardrails: string[]; boundaries: string[];
+	view: 'board'|'epic'|'history';
 }
 
-// ── Card ─────────────────────────────────────────────────────────────────────
+// ── Shell HTML — loaded ONCE, never replaced ──────────────────────────────────
 
-function card(issue: Issue, log: TaskLog | null): string {
-	const pc   = PRIORITY_DOT[issue.priority] ?? '#6e7681';
-	const pl   = PRIORITY_LABEL[issue.priority] ?? issue.priority;
-	const deps = issue.dependencies?.length
-		? `<div class="card-deps">⛓ ${issue.dependencies.join(', ')}</div>` : '';
-	const epic   = issue.epic ? `<span class="card-epic">${esc(issue.epic)}</span>` : '';
-	const labels = (issue.labels ?? []).map(l => `<span class="card-label">${esc(l)}</span>`).join('');
-
-	let logBadge = '';
-	if (log?.status === 'completed' && log.durationMin !== undefined) {
-		logBadge = `<span class="log-badge log-done">✓ ${log.durationMin}m</span>`;
-	} else if (log?.status === 'inprogress') {
-		logBadge = `<span class="log-badge log-running log-waiting">⏱ waiting…</span>`;
-	}
-
-	const noteText = log?.note || log?.summary || '';
-	const noteHtml = noteText
-		? `<div class="card-summary">${esc(noteText.slice(0, 140))}${noteText.length > 140 ? '…' : ''}</div>`
-		: '';
-
-	// Acceptance criteria tooltip
-	const criteriaCount = issue.acceptanceCriteria?.length ?? 0;
-	const criteriaTooltip = criteriaCount > 0
-		? issue.acceptanceCriteria.map((ac, i) => `${i + 1}. ${ac}`).join('\n')
-		: '';
-
-	let actions = '';
-	if (issue.status === 'todo') {
-		actions = `<button class="btn btn-run" onclick="send('runTask','${issue.id}')">▶ Run</button>`;
-	} else if (issue.status === 'blocked') {
-		actions = `<button class="btn btn-disabled" disabled>⛓ Blocked</button>`;
-	} else if (issue.status === 'inprogress') {
-		actions = `<button class="btn btn-done" onclick="send('markDone','${issue.id}')">✓ Mark done</button>`;
-	} else {
-		actions = `<button class="btn btn-note" onclick="send('addNote','${issue.id}')" title="Add note">✎</button>
-			<button class="btn btn-reset" onclick="send('resetTask','${issue.id}')">↩ Reset</button>`;
-	}
-
-	return `
-<div class="card" draggable="true"
-     data-id="${issue.id}" data-status="${issue.status}"
-     ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"
-     ondragover="onCardDragOver(event)" ondrop="onCardDrop(event)">
-  <div class="card-header">
-    <div class="card-header-left">
-      <span class="card-id">${esc(issue.id)}</span>${epic}${labels}
-    </div>
-    <div class="card-header-right">
-      <span class="priority-dot" style="background:${pc}" title="${pl}"></span>
-      ${logBadge}
-    </div>
-  </div>
-  <div class="card-title" onclick="send('showEditIssue','${issue.id}')" style="cursor:pointer" title="Click to edit">${esc(issue.title)}</div>
-  ${issue.description ? `<div class="card-desc">${esc(issue.description.slice(0, 100))}${issue.description.length > 100 ? '…' : ''}</div>` : ''}
-  ${noteHtml}${deps}
-  <div class="card-footer">
-    <span class="card-criteria${criteriaTooltip ? ' has-tooltip' : ''}"
-          ${criteriaTooltip ? `data-tooltip="${esc(criteriaTooltip)}"` : ''}
-    >${criteriaCount} criteria${criteriaCount > 0 ? ' 👁' : ''}</span>
-    ${actions}
-  </div>
-</div>`;
-}
-
-// ── Board view (by status) ────────────────────────────────────────────────────
-
-function boardView(prd: Prd, logs: Record<string, TaskLog>, autoRun: boolean): string {
-	return `<div class="board">
-  ${STATUS_COLS.map(col => {
-		const issues = prd.issues.filter(i => i.status === col.id);
-		const runnerBadge = col.id === 'inprogress' && autoRun
-			? `<span class="runner-badge">⚡ auto</span>` : '';
-		return `
-<div class="col" data-col="${col.id}"
-     ondragover="onDragOver(event)" ondragenter="onDragEnter(event)"
-     ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
-  <div class="col-header" style="--accent:${col.accent}">
-    <span class="col-title">${col.label}</span>
-    <div style="display:flex;align-items:center;gap:5px">
-      ${runnerBadge}
-      <span class="col-count">${issues.length}</span>
-    </div>
-  </div>
-  <div class="col-body">
-    ${issues.length ? issues.map(i => card(i, logs[i.id] ?? null)).join('') : `<div class="col-empty" data-col="${col.id}">Drop here</div>`}
-  </div>
-</div>`;
-	}).join('')}
-</div>`;
-}
-
-// ── Epic view (by epic group) ─────────────────────────────────────────────────
-
-function epicView(prd: Prd, logs: Record<string, TaskLog>): string {
-	const epics = [...new Set(prd.issues.map(i => i.epic || 'General'))];
-	return `<div class="epic-view">
-  ${epics.map(epic => {
-		const issues = prd.issues.filter(i => (i.epic || 'General') === epic);
-		const done   = issues.filter(i => i.status === 'completed').length;
-		const pct    = issues.length ? Math.round((done / issues.length) * 100) : 0;
-		return `
-<div class="epic-group">
-  <div class="epic-group-header">
-    <span class="epic-group-title">${esc(epic)}</span>
-    <div class="epic-group-meta">
-      <div class="progress-track" style="width:80px">
-        <div class="progress-fill" style="width:${pct}%"></div>
-      </div>
-      <span class="progress-label">${done}/${issues.length}</span>
-    </div>
-  </div>
-  <div class="epic-cols">
-    ${STATUS_COLS.map(col => {
-			const colIssues = issues.filter(i => i.status === col.id);
-			if (!colIssues.length) { return ''; }
-			return `<div class="epic-col">
-        <div class="epic-col-label" style="color:${col.accent}">${col.label} (${colIssues.length})</div>
-        ${colIssues.map(i => card(i, logs[i.id] ?? null)).join('')}
-      </div>`;
-		}).filter(Boolean).join('')}
-  </div>
-</div>`;
-	}).join('')}
-</div>`;
-}
-
-// ── History view ──────────────────────────────────────────────────────────────
-
-function historyView(logs: Record<string, TaskLog>): string {
-	const entries = Object.values(logs)
-		.filter(l => l.completedAt)
-		.sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
-
-	if (!entries.length) {
-		return `<div class="empty-state">
-  <div class="empty-icon">📋</div>
-  <div class="empty-title">No history yet</div>
-  <div class="empty-sub">Completed tasks will appear here with their logs.</div>
-</div>`;
-	}
-
-	const rows = entries.map(l => {
-		const date     = l.completedAt ? new Date(l.completedAt).toLocaleString() : '—';
-		const dur      = l.durationMin !== undefined ? `${l.durationMin}m` : '—';
-		const noteText = l.note || l.summary || '';
-		const statusDot = l.status === 'completed'
-			? `<span style="color:#3fb950">✓</span>`
-			: `<span style="color:#f85149">✗</span>`;
-		return `
-<tr class="history-row">
-  <td class="history-status">${statusDot}</td>
-  <td class="history-id"><span class="card-id">${esc(l.id)}</span></td>
-  <td class="history-title">${esc(l.title)}</td>
-  <td class="history-dur">${dur}</td>
-  <td class="history-date">${date}</td>
-  <td class="history-note">${noteText ? esc(noteText.slice(0, 80)) + (noteText.length > 80 ? '…' : '') : '<span style="opacity:.4">—</span>'}</td>
-</tr>`;
-	}).join('');
-
-	const totalDone = entries.filter(l => l.status === 'completed').length;
-	const totalMin  = entries.reduce((s, l) => s + (l.durationMin ?? 0), 0);
-	const avgMin    = entries.length ? Math.round(totalMin / entries.length) : 0;
-
-	return `
-<div class="history-view">
-  <div class="history-stats">
-    <div class="hstat"><span class="hstat-val">${totalDone}</span><span class="hstat-label">Completed</span></div>
-    <div class="hstat"><span class="hstat-val">${totalMin}m</span><span class="hstat-label">Total time</span></div>
-    <div class="hstat"><span class="hstat-val">${avgMin}m</span><span class="hstat-label">Avg / task</span></div>
-    <div class="hstat"><span class="hstat-val">${entries.length}</span><span class="hstat-label">Total runs</span></div>
-  </div>
-  <table class="history-table">
-    <thead>
-      <tr>
-        <th></th><th>ID</th><th>Title</th><th>Time</th><th>Completed</th><th>Note</th>
-      </tr>
-    </thead>
-    <tbody>${rows}</tbody>
-  </table>
-</div>`;
-}
-
-// ── Stats bar ─────────────────────────────────────────────────────────────────
-
-function statsBar(prd: Prd, cfg: BoardConfig): string {
-	const total = prd.issues.length;
-	const done  = prd.issues.filter(i => i.status === 'completed').length;
-	const pct   = total ? Math.round((done / total) * 100) : 0;
-	const epics = [...new Set(prd.issues.map(i => i.epic || 'General'))];
-
-	const runnerBtn = cfg.autoRun
-		? `<button class="btn btn-sm btn-runner-on" onclick="send('stopRunner')">⏹ Stop</button>`
-		: `<button class="btn btn-sm btn-runner-off" onclick="send('startRunner')">⚡ Auto-run</button>`;
-
-	const viewBtns = (['board','epic','history'] as const).map(v =>
-		`<button class="btn btn-sm ${cfg.view === v ? 'btn-view-active' : ''}" onclick="send('setView','${v}')">${
-			v === 'board' ? '⊞ Board' : v === 'epic' ? '⬡ Epic' : '📋 History'
-		}</button>`
-	).join('');
-
-	return `
-<div class="stats-bar">
-  <div class="stats-left">
-    <div class="stats-title">${esc(prd.project)}</div>
-    <div class="stats-desc">${esc(prd.description)}</div>
-  </div>
-  <div class="stats-mid">
-    <div class="progress-row">
-      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
-      <span class="progress-label">${done}/${total}&nbsp;<strong>${pct}%</strong></span>
-    </div>
-    <div class="epics-row">${epics.map(e => `<span class="epic-chip">${esc(e)}</span>`).join('')}</div>
-  </div>
-  <div class="stats-actions">
-    <div class="view-switcher">${viewBtns}</div>
-    ${runnerBtn}
-    <button class="btn btn-sm btn-github" onclick="send('pushToGitHub')" title="Push pending to GitHub">⬆ GitHub</button>
-    <button class="btn btn-sm btn-github" onclick="send('syncFromGitHub')" title="Sync from GitHub">⬇ Sync</button>
-    <button class="btn btn-sm btn-add" onclick="send('showAddIssue')" title="Add new issue">＋ Issue</button>
-    <button class="btn btn-sm btn-add" onclick="send('addFromChat')" title="Describe in natural language">＋ Chat</button>
-    <button class="btn btn-sm" onclick="send('openPrd')" title="Edit prd.json">📄 PRD</button>
-    <button class="btn btn-sm" onclick="send('openMemories')">🧠 Memory</button>
-    <button class="btn btn-sm" onclick="send('importPlan')" title="Import or append from Plan agent markdown">⬇ Plan</button>
-    <button class="btn btn-sm btn-setup" onclick="send('setupProject')" title="Generate/regenerate AGENTS.md and plans/">⚙ Agents</button>
-    <button class="btn btn-sm" onclick="send('openSettings')">⚙</button>
-    <button class="btn btn-sm" onclick="send('refresh')">↻</button>
-  </div>
-</div>`;
-}
-
-function guardrailsPanel(guardrails: string[], boundaries: string[]): string {
-	return `
-<details class="guardrails-panel">
-  <summary>🛡 Guardrails & Boundaries</summary>
-  <div class="guardrails-body">
-    ${guardrails.length ? `<div class="guardrails-section"><div class="guardrails-label">Rules injected in every prompt</div>${guardrails.map(g => `<div class="guardrail-item">• ${esc(g)}</div>`).join('')}</div>` : ''}
-    ${boundaries.length ? `<div class="guardrails-section"><div class="guardrails-label">Paths agent must never touch</div>${boundaries.map(b => `<div class="guardrail-item boundary-item">🚫 ${esc(b)}</div>`).join('')}</div>` : ''}
-    <button class="btn btn-sm" onclick="send('openSettings')" style="margin-top:6px">Edit in settings</button>
-  </div>
-</details>`;
-}
-
-function memoriesPanel(memories: string): string {
-	return `
-<details class="memories-panel">
-  <summary>🧠 Project Memory <span class="mem-hint">(edit in .agent/memories.md)</span></summary>
-  <pre class="memories-content">${esc(memories)}</pre>
-</details>`;
-}
-
-function emptyState(): string {
-	return `
-<div class="empty-state">
-  <div class="empty-icon">🚀</div>
-  <div class="empty-title">No prd.json found</div>
-  <div class="empty-sub">Generate one from a project description or import a Plan.</div>
-  <div style="display:flex;gap:8px;margin-top:8px">
-    <button class="btn btn-primary" onclick="send('initProject')">Init Project</button>
-    <button class="btn btn-primary" onclick="send('importPlan')" style="background:#1f6feb;border-color:#1f6feb">⬇ Import Plan</button>
-  </div>
-  <div class="empty-hint">Or place a <code>prd.json</code> in the workspace root</div>
-</div>`;
-}
-
-// ── Main export ───────────────────────────────────────────────────────────────
-
-export function getKanbanHtml(
-	prd: Prd | null,
-	memories: string | null,
-	logs: Record<string, TaskLog> = {},
-	cfg: BoardConfig = { autoRun: false, maxLoops: 5, guardrails: [], boundaries: [], view: 'board' }
-): string {
-
-	let mainContent = '';
-	if (!prd) {
-		mainContent = emptyState();
-	} else {
-		const bar = statsBar(prd, cfg);
-		if (cfg.view === 'history') {
-			mainContent = bar + historyView(logs);
-		} else if (cfg.view === 'epic') {
-			mainContent = bar + epicView(prd, logs);
-		} else {
-			mainContent = bar + boardView(prd, logs, cfg.autoRun);
-		}
-	}
-
+export function getShellHtml(): string {
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -325,48 +30,120 @@ export function getKanbanHtml(
   --bg2:   var(--vscode-sideBar-background,#161b22);
   --bg3:   var(--vscode-input-background,#21262d);
   --border:var(--vscode-panel-border,#30363d);
-  --text:  var(--vscode-editor-foreground,#c9d1d9);
+  --text:  var(--vscode-editor-foreground,#e6edf3);
   --text2: var(--vscode-descriptionForeground,#8b949e);
-  --btn-bg:var(--vscode-button-background,#238636);
-  --btn-h: var(--vscode-button-hoverBackground,#2ea043);
-  --blue:#58a6ff;--green:#3fb950;--red:#f85149;--amber:#e3b341;
-  --mono:var(--vscode-editor-font-family,'Cascadia Code','Fira Code',monospace);
-  --r:6px;
+  --blue:  var(--vscode-textLink-foreground,#58a6ff);
+  --green: var(--vscode-testing-iconPassed,#3fb950);
+  --red:   var(--vscode-testing-iconFailed,#f85149);
+  --amber: var(--vscode-editorWarning-foreground,#e3b341);
+  --purple:#8957e5; --mono: var(--vscode-editor-fontFamily,monospace);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:var(--vscode-font-family,-apple-system,'Segoe UI',sans-serif);font-size:var(--vscode-font-size,13px);overflow-x:auto}
-
-/* STATS BAR */
-.stats-bar{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--border);flex-wrap:wrap;position:sticky;top:0;z-index:10}
-.stats-left{flex:1;min-width:120px}
-.stats-title{font-size:13px;font-weight:600}
-.stats-desc{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
-.stats-mid{display:flex;flex-direction:column;gap:4px}
-.progress-row{display:flex;align-items:center;gap:7px}
-.progress-track{width:100px;height:3px;background:var(--bg3);border-radius:2px;overflow:hidden}
-.progress-fill{height:100%;background:var(--green);border-radius:2px;transition:width .4s}
-.progress-label{font-size:11px;color:var(--text2)}
-.progress-label strong{color:var(--green)}
-.epics-row{display:flex;gap:3px;flex-wrap:wrap}
-.epic-chip{font-size:10px;padding:1px 5px;border-radius:10px;background:rgba(88,166,255,.1);color:var(--blue);border:1px solid rgba(88,166,255,.25)}
-.stats-actions{display:flex;gap:3px;margin-left:auto;flex-wrap:wrap;align-items:center}
-.view-switcher{display:flex;gap:2px;background:var(--bg3);border-radius:5px;padding:2px}
-.btn-view-active{background:var(--bg2)!important;color:var(--text)!important;border-color:var(--border)!important}
-
-/* RUNNER */
-.runner-badge{font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;background:rgba(227,179,65,.15);color:var(--amber);border:1px solid rgba(227,179,65,.3);animation:pulse 2s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-.btn-runner-on{background:rgba(248,81,73,.12);border-color:rgba(248,81,73,.4);color:var(--red)}
-.btn-runner-on:hover{background:rgba(248,81,73,.22)!important}
-.btn-runner-off{background:rgba(227,179,65,.1);border-color:rgba(227,179,65,.35);color:var(--amber)}
-.btn-runner-off:hover{background:rgba(227,179,65,.2)!important}
+body{background:var(--bg);color:var(--text);font-family:var(--vscode-font-family,sans-serif);font-size:13px;height:100vh;overflow:hidden;display:flex;flex-direction:column}
+#root{flex:1;overflow:auto;padding:0}
+/* Empty state */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:10px;color:var(--text2)}
+.empty-icon{font-size:48px}
+.empty-title{font-size:18px;font-weight:600;color:var(--text)}
+.empty-sub{font-size:13px;text-align:center;max-width:320px}
+.empty-hint{font-size:11px;opacity:.6}
+code{background:var(--bg3);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:11px}
+/* Buttons */
+.btn{background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text);cursor:pointer;font-family:inherit;font-size:12px;padding:4px 10px;transition:background .15s}
+.btn:hover{background:var(--bg2)!important}
+.btn:disabled{opacity:.45;cursor:default}
+.btn-primary{background:var(--green);border-color:var(--green);color:#fff;font-weight:600;padding:7px 18px;font-size:13px}
+.btn-primary:hover{background:#2ea043!important}
+.btn-run{background:rgba(56,139,253,.15);border-color:rgba(56,139,253,.4);color:var(--blue)}
+.btn-done{background:rgba(63,185,80,.12);border-color:rgba(63,185,80,.35);color:var(--green)}
+.btn-note{background:transparent;border-color:var(--border);color:var(--text2);padding:3px 7px}
+.btn-reset{background:transparent;border-color:var(--border);color:var(--text2);padding:3px 7px}
+.btn-disabled{background:rgba(110,118,129,.1);border-color:rgba(110,118,129,.3);color:var(--text2)}
+.btn-sm{font-size:11px;padding:3px 8px}
 .btn-github{background:rgba(139,148,158,.1);border-color:rgba(139,148,158,.3);color:var(--text2)}
-.btn-github:hover{background:rgba(139,148,158,.2)!important;color:var(--text)!important}
 .btn-add{background:rgba(63,185,80,.1);border-color:rgba(63,185,80,.35);color:var(--green)}
-.btn-add:hover{background:rgba(63,185,80,.2)!important}
 .btn-setup{background:rgba(227,179,65,.08);border-color:rgba(227,179,65,.3);color:var(--amber)}
-.btn-setup:hover{background:rgba(227,179,65,.18)!important}
-/* ADD ISSUE MODAL */
+.btn-runner-on{background:rgba(248,81,73,.12);border-color:rgba(248,81,73,.4);color:var(--red)}
+.btn-runner-off{background:rgba(227,179,65,.1);border-color:rgba(227,179,65,.35);color:var(--amber)}
+.btn-view-active{background:var(--bg);border-color:var(--blue);color:var(--blue)}
+/* Board */
+.board{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:10px;height:100%}
+.col{background:var(--bg2);border-radius:8px;display:flex;flex-direction:column;min-height:0;border:2px solid transparent;transition:border-color .15s}
+.col.drag-over{border-color:var(--blue)}
+.col-header{padding:10px 12px 8px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+.col-title{font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)}
+.col-count{background:var(--bg3);border-radius:10px;padding:1px 7px;font-size:11px;color:var(--text2)}
+.col-body{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px}
+/* Cards */
+.card{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:10px 11px;cursor:grab;transition:border-color .15s,opacity .15s;user-select:none}
+.card:hover{border-color:var(--blue)}
+.card.dragging{opacity:.4}
+.card.drop-above{border-top:2px solid var(--blue)!important}
+.card.drop-below{border-bottom:2px solid var(--blue)!important}
+.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+.card-header-left{display:flex;gap:5px;align-items:center;flex-wrap:wrap;min-width:0}
+.card-header-right{display:flex;gap:5px;align-items:center;flex-shrink:0}
+.card-id{font-size:10px;font-family:var(--mono);color:var(--text2);background:var(--bg3);padding:1px 5px;border-radius:3px}
+.card-epic{font-size:10px;background:rgba(137,87,229,.18);color:var(--purple);padding:1px 5px;border-radius:3px}
+.card-label{font-size:10px;background:var(--bg3);color:var(--text2);padding:1px 5px;border-radius:3px}
+.card-title{font-size:13px;font-weight:500;line-height:1.4;margin-bottom:3px;cursor:pointer}
+.card-title:hover{color:var(--blue)}
+.card-desc{font-size:11px;color:var(--text2);line-height:1.4;margin-bottom:4px}
+.card-summary{font-size:11px;color:var(--green);line-height:1.4;margin-bottom:4px;font-style:italic}
+.card-deps{font-size:10px;color:var(--amber);margin-bottom:4px}
+.card-footer{display:flex;align-items:center;justify-content:space-between;margin-top:6px}
+.card-criteria{font-size:10px;color:var(--text2);position:relative;cursor:default}
+.card-criteria.has-tooltip{cursor:help;text-decoration:underline dotted;text-underline-offset:2px}
+.card-criteria.has-tooltip:hover::after{
+  content:attr(data-tooltip);position:absolute;bottom:calc(100% + 6px);left:0;
+  background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;
+  font-size:11px;color:var(--text);line-height:1.5;white-space:pre-wrap;min-width:200px;
+  max-width:340px;z-index:50;box-shadow:0 4px 16px rgba(0,0,0,.3);pointer-events:none;
+}
+.priority-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.log-badge{font-size:10px;padding:1px 5px;border-radius:3px;font-family:var(--mono)}
+.log-done{background:rgba(63,185,80,.15);color:var(--green)}
+.log-running{background:rgba(227,179,65,.15);color:var(--amber)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.log-waiting{animation:pulse 1.5s ease-in-out infinite}
+/* Stats bar */
+.stats-bar{padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:5px}
+.stats-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.project-title{font-weight:700;font-size:14px}
+.project-desc{font-size:11px;color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.progress-bar{width:80px;height:5px;background:var(--bg3);border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;background:var(--green);border-radius:3px;transition:width .3s}
+.progress-pct{font-size:11px;color:var(--text2)}
+.epics-row{display:flex;gap:5px;flex-wrap:wrap}
+.epic-chip{font-size:10px;background:rgba(137,87,229,.15);color:var(--purple);padding:1px 7px;border-radius:10px}
+.stats-actions{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.view-switcher{display:flex;gap:2px;background:var(--bg3);border-radius:5px;padding:2px}
+/* Epic view */
+.epic-group{margin:10px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)}
+.epic-group-header{padding:8px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+.epic-group-title{font-weight:600;color:var(--purple)}
+.epic-progress{font-size:11px;color:var(--text2)}
+.epic-cards{padding:8px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px}
+/* History */
+.history-table{width:100%;border-collapse:collapse;font-size:12px}
+.history-table th{text-align:left;padding:8px 12px;border-bottom:2px solid var(--border);color:var(--text2);font-weight:600;white-space:nowrap}
+.history-table td{padding:7px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.history-table tr:hover td{background:var(--bg2)}
+.dur-badge{background:var(--bg3);padding:2px 7px;border-radius:10px;font-size:10px;font-family:var(--mono)}
+/* Guardrails / Memories panels */
+.guardrails-panel,.memories-panel{border-top:1px solid var(--border)}
+summary{padding:8px 14px;cursor:pointer;font-size:12px;font-weight:600;color:var(--text2);user-select:none;list-style:none}
+summary:hover{color:var(--text)}
+.guardrails-body{padding:8px 14px 12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.guardrails-section{display:flex;flex-direction:column;gap:3px}
+.guardrails-label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);font-weight:600;margin-bottom:2px}
+.guardrail-item{font-size:11px;color:var(--text);padding:2px 0}
+.boundary-item{color:var(--red)}
+.memories-content{font-family:var(--mono);font-size:11px;color:var(--text2);padding:10px 14px;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow-y:auto;border-top:1px solid var(--border);line-height:1.6}
+.mem-hint{font-size:10px;font-weight:400;opacity:.6;margin-left:6px}
+/* Drag ghost */
+.drag-ghost{position:fixed;top:-999px;left:-999px;background:var(--bg2);border:1px solid var(--blue);border-radius:5px;padding:5px 10px;font-size:12px;color:var(--text);pointer-events:none;white-space:nowrap;z-index:9999}
+/* Modals */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;display:flex;align-items:center;justify-content:center}
 .modal{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px 22px;width:420px;max-width:95vw;display:flex;flex-direction:column;gap:12px}
 .modal-title{font-size:14px;font-weight:600;color:var(--text)}
@@ -378,177 +155,25 @@ body{background:var(--bg);color:var(--text);font-family:var(--vscode-font-family
 .modal-select option{background:var(--bg2)}
 .modal-row-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .modal-footer{display:flex;justify-content:flex-end;gap:7px;margin-top:4px}
-.btn-github:hover{background:rgba(139,148,158,.2)!important;color:var(--text)!important}
-
-/* BOARD */
-.board{display:flex;min-height:calc(100vh - 54px);align-items:flex-start}
-.col{flex:1;min-width:200px;max-width:300px;display:flex;flex-direction:column;border-right:1px solid var(--border);transition:background .15s}
-.col:last-child{border-right:none}
-.col.drag-over{background:rgba(88,166,255,.04)}
-.col-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px 7px;background:var(--bg2);border-bottom:2px solid var(--accent,var(--border));position:sticky;top:46px;z-index:5}
-.col-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text2)}
-.col-count{font-size:10px;font-weight:700;padding:1px 5px;border-radius:8px;background:rgba(255,255,255,.07);color:var(--text2)}
-.col-body{padding:6px;display:flex;flex-direction:column;gap:6px;min-height:80px}
-.col-empty{font-size:11px;color:var(--text2);text-align:center;padding:20px 0;opacity:.4;border:1px dashed var(--border);border-radius:var(--r);margin:4px}
-
-/* EPIC VIEW */
-.epic-view{padding:12px;display:flex;flex-direction:column;gap:16px}
-.epic-group{background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden}
-.epic-group-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border)}
-.epic-group-title{font-size:13px;font-weight:600;color:var(--blue)}
-.epic-group-meta{display:flex;align-items:center;gap:8px}
-.epic-cols{display:flex;gap:0;flex-wrap:wrap}
-.epic-col{flex:1;min-width:180px;padding:8px;border-right:1px solid var(--border)}
-.epic-col:last-child{border-right:none}
-.epic-col-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
-
-/* HISTORY VIEW */
-.history-view{padding:12px}
-.history-stats{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
-.hstat{display:flex;flex-direction:column;align-items:center;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 20px;min-width:80px}
-.hstat-val{font-size:22px;font-weight:700;color:var(--text)}
-.hstat-label{font-size:10px;color:var(--text2);margin-top:2px;text-transform:uppercase;letter-spacing:.05em}
-.history-table{width:100%;border-collapse:collapse;font-size:12px}
-.history-table th{text-align:left;padding:6px 10px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);border-bottom:1px solid var(--border);background:var(--bg2)}
-.history-row{border-bottom:1px solid var(--border);transition:background .1s}
-.history-row:hover{background:var(--bg2)}
-.history-row td{padding:7px 10px;vertical-align:middle}
-.history-status{width:24px;text-align:center}
-.history-id{width:90px}
-.history-dur{width:50px;color:var(--text2);font-family:var(--mono);font-size:11px}
-.history-date{width:140px;color:var(--text2);font-size:11px}
-.history-note{color:var(--text2);font-size:11px}
-.history-title{font-weight:500}
-
-/* CARD */
-.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:9px 10px;transition:border-color .15s,transform .1s;cursor:grab}
-.card:active{cursor:grabbing}
-.card:hover{border-color:rgba(88,166,255,.45);transform:translateY(-1px)}
-.card.dragging{opacity:.35;transform:scale(.97)}
-.card[data-status="inprogress"]{border-left:3px solid var(--blue)}
-.card[data-status="completed"]{border-left:3px solid var(--green);opacity:.65}
-.card[data-status="blocked"]{border-left:3px solid var(--red)}
-.card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px;gap:6px}
-.card-header-left{display:flex;flex-wrap:wrap;gap:3px;align-items:center;flex:1;min-width:0}
-.card-header-right{display:flex;align-items:center;gap:4px;flex-shrink:0}
-.card-id{font-family:var(--mono);font-size:10px;color:var(--text2);background:var(--bg3);padding:1px 5px;border-radius:4px;white-space:nowrap}
-.card-epic{font-size:10px;padding:1px 5px;border-radius:10px;background:rgba(88,166,255,.1);color:var(--blue);border:1px solid rgba(88,166,255,.2)}
-.card-label{font-size:10px;padding:1px 5px;border-radius:10px;background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
-.priority-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.log-badge{font-size:10px;padding:1px 5px;border-radius:10px;font-weight:600}
-.log-done{background:rgba(63,185,80,.15);color:var(--green);border:1px solid rgba(63,185,80,.3)}
-.log-running{background:rgba(88,166,255,.15);color:var(--blue);border:1px solid rgba(88,166,255,.3)}
-.card-title{font-size:12px;font-weight:500;line-height:1.35;margin-bottom:4px}
-.card-desc{font-size:11px;color:var(--text2);line-height:1.4;margin-bottom:4px}
-.card-summary{font-size:11px;color:var(--green);line-height:1.4;margin-bottom:4px;padding:4px 6px;background:rgba(63,185,80,.06);border-radius:4px;border-left:2px solid rgba(63,185,80,.4)}
-.card-deps{font-size:10px;color:var(--amber);margin-bottom:4px}
-.card-footer{display:flex;align-items:center;justify-content:space-between;margin-top:6px}
-.card-criteria{font-size:10px;color:var(--text2);position:relative;cursor:default}
-.card-criteria.has-tooltip{cursor:help;text-decoration:underline dotted;text-underline-offset:2px}
-.card-criteria.has-tooltip:hover::after{
-  content:attr(data-tooltip);
-  position:absolute;bottom:calc(100% + 6px);left:0;
-  background:var(--bg);border:1px solid var(--border);border-radius:6px;
-  padding:7px 10px;font-size:11px;color:var(--text);line-height:1.5;
-  white-space:pre;min-width:200px;max-width:340px;word-break:break-word;
-  white-space:pre-wrap;z-index:50;box-shadow:0 4px 16px rgba(0,0,0,.3);
-  pointer-events:none;
-}
-/* waiting pulse on inprogress badge */
-.log-waiting{animation:pulse 1.5s ease-in-out infinite}
-/* same-column reorder drop indicator */
-.card.drop-above{border-top:2px solid var(--blue)!important}
-.card.drop-below{border-bottom:2px solid var(--blue)!important}
-
-/* BUTTONS */
-.btn{font-size:11px;font-weight:500;padding:3px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;transition:background .1s,border-color .1s;white-space:nowrap}
-.btn:hover:not(:disabled){background:var(--bg);border-color:var(--text2)}
-.btn-run{background:rgba(88,166,255,.12);border-color:rgba(88,166,255,.4);color:var(--blue)}
-.btn-run:hover{background:rgba(88,166,255,.22)!important}
-.btn-done{background:rgba(63,185,80,.12);border-color:rgba(63,185,80,.4);color:var(--green)}
-.btn-done:hover{background:rgba(63,185,80,.22)!important}
-.btn-note{padding:3px 6px;color:var(--text2)}
-.btn-note:hover{color:var(--amber)!important;border-color:var(--amber)!important}
-.btn-reset{color:var(--text2)}
-.btn-disabled{color:var(--text2);opacity:.35;cursor:not-allowed}
-.btn-sm{font-size:11px;padding:3px 7px}
-.btn-primary{background:var(--btn-bg);border-color:var(--btn-bg);color:#fff;font-size:13px;padding:7px 18px;margin-top:8px}
-.btn-primary:hover{background:var(--btn-h)!important;border-color:var(--btn-h)!important}
-
-/* EMPTY */
-.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;gap:8px;text-align:center;padding:40px}
-.empty-icon{font-size:52px;margin-bottom:4px}
-.empty-title{font-size:18px;font-weight:600}
-.empty-sub{font-size:13px;color:var(--text2);max-width:300px;line-height:1.5}
-.empty-hint{font-size:11px;color:var(--text2);margin-top:8px;opacity:.7}
-.empty-hint code{background:var(--bg3);padding:1px 4px;border-radius:3px}
-
-/* GUARDRAILS */
-.guardrails-panel{border-top:1px solid var(--border);background:var(--bg2)}
-.guardrails-panel summary{padding:7px 14px;cursor:pointer;color:var(--text2);font-size:12px;user-select:none}
-.guardrails-panel summary:hover{color:var(--text)}
-.guardrails-body{padding:8px 14px 12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
-.guardrails-section{display:flex;flex-direction:column;gap:3px}
-.guardrails-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:2px}
-.guardrail-item{font-size:11px;color:var(--text);padding:2px 0}
-.boundary-item{color:var(--red);font-family:var(--mono)}
-
-/* MEMORIES */
-.memories-panel{border-top:1px solid var(--border);background:var(--bg2)}
-.memories-panel summary{padding:7px 14px;cursor:pointer;color:var(--text2);font-size:12px;user-select:none}
-.memories-panel summary:hover{color:var(--text)}
-.mem-hint{font-size:10px;opacity:.6;margin-left:6px}
-.memories-content{font-family:var(--mono);font-size:11px;color:var(--text2);padding:10px 14px;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow-y:auto;border-top:1px solid var(--border);line-height:1.6}
-
-/* DRAG GHOST */
-.drag-ghost{position:fixed;top:-9999px;left:-9999px;background:var(--bg2);border:1px solid var(--blue);border-radius:var(--r);padding:8px 12px;font-size:12px;font-weight:500;color:var(--text);pointer-events:none;z-index:9999}
 </style>
 </head>
 <body>
-${mainContent}
-${prd && (cfg.guardrails.length || cfg.boundaries.length) ? guardrailsPanel(cfg.guardrails, cfg.boundaries) : ''}
-${prd && memories ? memoriesPanel(memories) : ''}
+<div id="root"><div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-title">Loading...</div></div></div>
 <div class="drag-ghost" id="dragGhost"></div>
 
 <!-- Add Issue Modal -->
-<div class="modal-overlay" id="addModal" style="display:none" onclick="if(event.target===this)closeModal()">
+<div class="modal-overlay" id="addModal" style="display:none" onclick="if(event.target===this)closeAddModal()">
   <div class="modal">
     <div class="modal-title">＋ New Issue</div>
-    <div class="modal-row">
-      <label class="modal-label">Title *</label>
-      <input class="modal-input" id="mi-title" placeholder="Short descriptive title" />
-    </div>
-    <div class="modal-row">
-      <label class="modal-label">Description</label>
-      <textarea class="modal-textarea" id="mi-desc" placeholder="What needs to be done?"></textarea>
-    </div>
+    <div class="modal-row"><label class="modal-label">Title *</label><input class="modal-input" id="mi-title" placeholder="Short descriptive title"/></div>
+    <div class="modal-row"><label class="modal-label">Description</label><textarea class="modal-textarea" id="mi-desc" placeholder="What needs to be done?"></textarea></div>
     <div class="modal-row-2">
-      <div class="modal-row">
-        <label class="modal-label">Epic</label>
-        <input class="modal-input" id="mi-epic" placeholder="e.g. Auth, Backend…" />
-      </div>
-      <div class="modal-row">
-        <label class="modal-label">Priority</label>
-        <select class="modal-select" id="mi-priority">
-          <option value="P0">🔴 P0 — Critical</option>
-          <option value="P1">🟠 P1 — High</option>
-          <option value="P2" selected>🔵 P2 — Medium</option>
-          <option value="P3">⚪ P3 — Low</option>
-        </select>
-      </div>
+      <div class="modal-row"><label class="modal-label">Epic</label><input class="modal-input" id="mi-epic" placeholder="e.g. Auth, Backend…"/></div>
+      <div class="modal-row"><label class="modal-label">Priority</label><select class="modal-select" id="mi-priority"><option value="P0">🔴 P0</option><option value="P1">🟠 P1</option><option value="P2" selected>🔵 P2</option><option value="P3">⚪ P3</option></select></div>
     </div>
-    <div class="modal-row">
-      <label class="modal-label">Acceptance Criteria <span style="opacity:.5">(one per line)</span></label>
-      <textarea class="modal-textarea" id="mi-criteria" placeholder="Feature works as expected&#10;Tests pass&#10;No console errors"></textarea>
-    </div>
-    <div class="modal-row">
-      <label class="modal-label">Labels <span style="opacity:.5">(comma-separated)</span></label>
-      <input class="modal-input" id="mi-labels" placeholder="e.g. frontend, api" />
-    </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-run" onclick="submitAddIssue()">Add Issue</button>
-    </div>
+    <div class="modal-row"><label class="modal-label">Acceptance Criteria (one per line)</label><textarea class="modal-textarea" id="mi-criteria"></textarea></div>
+    <div class="modal-row"><label class="modal-label">Labels (comma-separated)</label><input class="modal-input" id="mi-labels"/></div>
+    <div class="modal-footer"><button class="btn" onclick="closeAddModal()">Cancel</button><button class="btn btn-run" onclick="submitAddIssue()">Add Issue</button></div>
   </div>
 </div>
 
@@ -557,47 +182,18 @@ ${prd && memories ? memoriesPanel(memories) : ''}
   <div class="modal" style="width:480px">
     <div class="modal-title">✎ Edit Issue</div>
     <input type="hidden" id="em-id"/>
-    <div class="modal-row">
-      <label class="modal-label">Title *</label>
-      <input class="modal-input" id="em-title"/>
-    </div>
-    <div class="modal-row">
-      <label class="modal-label">Description</label>
-      <textarea class="modal-textarea" id="em-desc" style="min-height:80px"></textarea>
-    </div>
+    <div class="modal-row"><label class="modal-label">Title *</label><input class="modal-input" id="em-title"/></div>
+    <div class="modal-row"><label class="modal-label">Description</label><textarea class="modal-textarea" id="em-desc" style="min-height:80px"></textarea></div>
     <div class="modal-row-2">
-      <div class="modal-row">
-        <label class="modal-label">Epic</label>
-        <input class="modal-input" id="em-epic"/>
-      </div>
-      <div class="modal-row">
-        <label class="modal-label">Priority</label>
-        <select class="modal-select" id="em-priority">
-          <option value="P0">🔴 P0 — Critical</option>
-          <option value="P1">🟠 P1 — High</option>
-          <option value="P2">🔵 P2 — Medium</option>
-          <option value="P3">⚪ P3 — Low</option>
-        </select>
-      </div>
+      <div class="modal-row"><label class="modal-label">Epic</label><input class="modal-input" id="em-epic"/></div>
+      <div class="modal-row"><label class="modal-label">Priority</label><select class="modal-select" id="em-priority"><option value="P0">🔴 P0</option><option value="P1">🟠 P1</option><option value="P2">🔵 P2</option><option value="P3">⚪ P3</option></select></div>
     </div>
-    <div class="modal-row">
-      <label class="modal-label">Acceptance Criteria <span style="opacity:.5">(one per line)</span></label>
-      <textarea class="modal-textarea" id="em-criteria" style="min-height:80px"></textarea>
-    </div>
+    <div class="modal-row"><label class="modal-label">Acceptance Criteria (one per line)</label><textarea class="modal-textarea" id="em-criteria" style="min-height:80px"></textarea></div>
     <div class="modal-row-2">
-      <div class="modal-row">
-        <label class="modal-label">Labels <span style="opacity:.5">(comma-separated)</span></label>
-        <input class="modal-input" id="em-labels"/>
-      </div>
-      <div class="modal-row">
-        <label class="modal-label">Dependencies <span style="opacity:.5">(comma-separated IDs)</span></label>
-        <input class="modal-input" id="em-deps"/>
-      </div>
+      <div class="modal-row"><label class="modal-label">Labels (comma-separated)</label><input class="modal-input" id="em-labels"/></div>
+      <div class="modal-row"><label class="modal-label">Dependencies (comma-separated IDs)</label><input class="modal-input" id="em-deps"/></div>
     </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeEditModal()">Cancel</button>
-      <button class="btn btn-run" onclick="submitEditIssue()">Save</button>
-    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeEditModal()">Cancel</button><button class="btn btn-run" onclick="submitEditIssue()">Save</button></div>
   </div>
 </div>
 
@@ -605,177 +201,329 @@ ${prd && memories ? memoriesPanel(memories) : ''}
 const vscode = acquireVsCodeApi();
 function send(type, id) { vscode.postMessage({ type, id }); }
 
-// ── Listen for messages from extension (e.g. open modal from menu) ───────────
+// ── Receive data updates from extension via postMessage ───────────────────────
 window.addEventListener('message', e => {
   const msg = e.data;
-  if (msg.type === 'openAddModal')  { showAddIssue(); }
-  if (msg.type === 'openEditModal') { showEditModal(msg.issue); }
+  if (!msg || typeof msg !== 'object' || !msg.type) { return; }
+  if (msg.type === 'update') { renderBoard(msg.data); return; }
+  if (msg.type === 'openAddModal')  { showAddIssue(); return; }
+  if (msg.type === 'openEditModal') { showEditModal(msg.issue); return; }
 });
 
-// ── Edit Issue Modal ─────────────────────────────────────────────────────────
-function showEditModal(issue) {
-  document.getElementById('em-id').value          = issue.id ?? '';
-  document.getElementById('em-title').value       = issue.title ?? '';
-  document.getElementById('em-desc').value        = issue.description ?? '';
-  document.getElementById('em-epic').value        = issue.epic ?? '';
-  document.getElementById('em-priority').value    = issue.priority ?? 'P2';
-  document.getElementById('em-criteria').value    = (issue.acceptanceCriteria ?? []).join('\n');
-  document.getElementById('em-labels').value      = (issue.labels ?? []).join(', ');
-  document.getElementById('em-deps').value        = (issue.dependencies ?? []).join(', ');
-  document.getElementById('editModal').style.display = 'flex';
-  document.getElementById('em-title').focus();
+// ── Board renderer ────────────────────────────────────────────────────────────
+function renderBoard(data) {
+  if (!data) { return; }
+  document.getElementById('root').innerHTML = data.html;
 }
-function closeEditModal() {
-  document.getElementById('editModal').style.display = 'none';
-}
-function submitEditIssue() {
-  const id = document.getElementById('em-id').value;
-  if (!id) { return; }
-  const criteria = document.getElementById('em-criteria').value
-    .split('\n').map(l => l.trim()).filter(Boolean);
-  const labels = document.getElementById('em-labels').value
-    .split(',').map(l => l.trim()).filter(Boolean);
-  const deps = document.getElementById('em-deps').value
-    .split(',').map(l => l.trim()).filter(Boolean);
-  vscode.postMessage({
-    type: 'editIssue',
-    id,
-    fields: {
-      title:              document.getElementById('em-title').value.trim(),
-      description:        document.getElementById('em-desc').value.trim(),
-      epic:               document.getElementById('em-epic').value.trim() || undefined,
-      priority:           document.getElementById('em-priority').value,
-      acceptanceCriteria: criteria,
-      labels,
-      dependencies:       deps,
-    }
-  });
-  closeEditModal();
-}
-// Close modals on Escape, submit on Ctrl+Enter
-document.addEventListener('keydown', e => {
-  const addOpen  = document.getElementById('addModal').style.display  !== 'none';
-  const editOpen = document.getElementById('editModal').style.display !== 'none';
-  if (e.key === 'Escape') { closeModal(); closeEditModal(); }
-  if (e.key === 'Enter' && e.ctrlKey) {
-    if (addOpen)  { submitAddIssue(); }
-    if (editOpen) { submitEditIssue(); }
-  }
-});
+
+// ── Add Issue Modal ───────────────────────────────────────────────────────────
 function showAddIssue() {
   document.getElementById('addModal').style.display = 'flex';
   document.getElementById('mi-title').focus();
 }
-function closeModal() {
+function closeAddModal() {
   document.getElementById('addModal').style.display = 'none';
-  ['mi-title','mi-desc','mi-epic','mi-criteria','mi-labels'].forEach(id => {
-    document.getElementById(id).value = '';
-  });
+  ['mi-title','mi-desc','mi-epic','mi-criteria','mi-labels'].forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('mi-priority').value = 'P2';
 }
 function submitAddIssue() {
   const title = document.getElementById('mi-title').value.trim();
   if (!title) { document.getElementById('mi-title').focus(); return; }
-  const criteria = document.getElementById('mi-criteria').value
-    .split('\\n').map(l => l.trim()).filter(Boolean);
-  const labels = document.getElementById('mi-labels').value
-    .split(',').map(l => l.trim()).filter(Boolean);
-  vscode.postMessage({
-    type: 'addIssue',
-    issue: {
-      title,
-      description: document.getElementById('mi-desc').value.trim(),
-      epic:        document.getElementById('mi-epic').value.trim() || undefined,
-      priority:    document.getElementById('mi-priority').value,
-      acceptanceCriteria: criteria,
-      labels,
-    }
-  });
-  closeModal();
+  vscode.postMessage({ type: 'addIssue', issue: {
+    title,
+    description: document.getElementById('mi-desc').value.trim(),
+    epic: document.getElementById('mi-epic').value.trim() || undefined,
+    priority: document.getElementById('mi-priority').value,
+    acceptanceCriteria: document.getElementById('mi-criteria').value.split('\\n').map(l=>l.trim()).filter(Boolean),
+    labels: document.getElementById('mi-labels').value.split(',').map(l=>l.trim()).filter(Boolean),
+  }});
+  closeAddModal();
 }
-// ── Drag & Drop (column change + same-column reorder) ─────────────────────────
+
+// ── Edit Issue Modal ──────────────────────────────────────────────────────────
+function showEditModal(issue) {
+  document.getElementById('em-id').value       = issue.id ?? '';
+  document.getElementById('em-title').value    = issue.title ?? '';
+  document.getElementById('em-desc').value     = issue.description ?? '';
+  document.getElementById('em-epic').value     = issue.epic ?? '';
+  document.getElementById('em-priority').value = issue.priority ?? 'P2';
+  document.getElementById('em-criteria').value = (issue.acceptanceCriteria ?? []).join('\\n');
+  document.getElementById('em-labels').value   = (issue.labels ?? []).join(', ');
+  document.getElementById('em-deps').value     = (issue.dependencies ?? []).join(', ');
+  document.getElementById('editModal').style.display = 'flex';
+  document.getElementById('em-title').focus();
+}
+function closeEditModal() { document.getElementById('editModal').style.display = 'none'; }
+function submitEditIssue() {
+  const id = document.getElementById('em-id').value;
+  if (!id) { return; }
+  vscode.postMessage({ type: 'editIssue', id, fields: {
+    title:              document.getElementById('em-title').value.trim(),
+    description:        document.getElementById('em-desc').value.trim(),
+    epic:               document.getElementById('em-epic').value.trim() || undefined,
+    priority:           document.getElementById('em-priority').value,
+    acceptanceCriteria: document.getElementById('em-criteria').value.split('\\n').map(l=>l.trim()).filter(Boolean),
+    labels:             document.getElementById('em-labels').value.split(',').map(l=>l.trim()).filter(Boolean),
+    dependencies:       document.getElementById('em-deps').value.split(',').map(l=>l.trim()).filter(Boolean),
+  }});
+  closeEditModal();
+}
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  const addOpen  = document.getElementById('addModal').style.display  !== 'none';
+  const editOpen = document.getElementById('editModal').style.display !== 'none';
+  if (e.key === 'Escape') { closeAddModal(); closeEditModal(); }
+  if (e.key === 'Enter' && e.ctrlKey) {
+    if (addOpen)  { submitAddIssue(); }
+    if (editOpen) { submitEditIssue(); }
+  }
+});
+
+// ── Drag & Drop ───────────────────────────────────────────────────────────────
 let dragId = null, dragEl = null, dragSourceCol = null;
 const ghost = document.getElementById('dragGhost');
-
 function onDragStart(e) {
-  dragEl = e.currentTarget;
-  dragId = dragEl.dataset.id;
+  dragEl = e.currentTarget; dragId = dragEl.dataset.id;
   dragSourceCol = dragEl.closest('.col')?.dataset.col ?? null;
   dragEl.classList.add('dragging');
-  ghost.textContent = dragEl.querySelector('.card-id').textContent + '  ' + dragEl.querySelector('.card-title').textContent.slice(0, 30);
+  ghost.textContent = dragEl.querySelector('.card-id').textContent + '  ' + dragEl.querySelector('.card-title').textContent.slice(0,30);
   e.dataTransfer.setDragImage(ghost, 0, 0);
   e.dataTransfer.effectAllowed = 'move';
 }
 function onDragEnd(e) {
   dragEl?.classList.remove('dragging');
-  document.querySelectorAll('.card.drop-above,.card.drop-below').forEach(c => {
-    c.classList.remove('drop-above','drop-below');
-  });
+  document.querySelectorAll('.card.drop-above,.card.drop-below').forEach(c=>c.classList.remove('drop-above','drop-below'));
   dragEl = null; dragId = null; dragSourceCol = null;
-  document.querySelectorAll('.col').forEach(c => c.classList.remove('drag-over'));
+  document.querySelectorAll('.col').forEach(c=>c.classList.remove('drag-over'));
 }
-function onDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
-function onDragEnter(e) {
-  document.querySelectorAll('.col').forEach(c => c.classList.remove('drag-over'));
-  e.currentTarget.classList.add('drag-over');
-}
-function onDragLeave(e) {
-  if (!e.currentTarget.contains(e.relatedTarget)) { e.currentTarget.classList.remove('drag-over'); }
-}
+function onDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect='move'; }
+function onDragEnter(e) { document.querySelectorAll('.col').forEach(c=>c.classList.remove('drag-over')); e.currentTarget.classList.add('drag-over'); }
+function onDragLeave(e) { if(!e.currentTarget.contains(e.relatedTarget)){ e.currentTarget.classList.remove('drag-over'); } }
 function onDrop(e) {
   e.preventDefault();
-  const col = e.currentTarget;
-  const newStatus = col.dataset.col;
+  const col = e.currentTarget; const newStatus = col.dataset.col;
   col.classList.remove('drag-over');
   if (!dragId || !newStatus) { return; }
-  // Cross-column move
-  if (dragEl?.dataset.status !== newStatus) {
-    vscode.postMessage({ type: 'moveCard', id: dragId, status: newStatus });
-  }
+  if (dragEl?.dataset.status !== newStatus) { vscode.postMessage({ type:'moveCard', id:dragId, status:newStatus }); }
 }
-
-// Same-column card reorder
 function onCardDragOver(e) {
-  e.preventDefault();
-  e.stopPropagation();
+  e.preventDefault(); e.stopPropagation();
   const target = e.currentTarget;
   if (!dragEl || target === dragEl) { return; }
-  // Only reorder within same column
-  const targetCol = target.closest('.col')?.dataset.col;
-  if (targetCol !== dragSourceCol) { return; }
-  // Show drop indicator above or below
-  document.querySelectorAll('.card.drop-above,.card.drop-below').forEach(c => {
-    c.classList.remove('drop-above','drop-below');
-  });
-  const rect   = target.getBoundingClientRect();
-  const midY   = rect.top + rect.height / 2;
-  if (e.clientY < midY) {
-    target.classList.add('drop-above');
-  } else {
-    target.classList.add('drop-below');
-  }
+  if (target.closest('.col')?.dataset.col !== dragSourceCol) { return; }
+  document.querySelectorAll('.card.drop-above,.card.drop-below').forEach(c=>c.classList.remove('drop-above','drop-below'));
+  const rect = target.getBoundingClientRect();
+  target.classList.add(e.clientY < rect.top + rect.height/2 ? 'drop-above' : 'drop-below');
 }
 function onCardDrop(e) {
-  e.preventDefault();
-  e.stopPropagation();
+  e.preventDefault(); e.stopPropagation();
   const target = e.currentTarget;
   if (!dragEl || target === dragEl) { return; }
-  const targetCol = target.closest('.col')?.dataset.col;
-  if (targetCol !== dragSourceCol) { return; }
-  const rect   = target.getBoundingClientRect();
-  const before = e.clientY < rect.top + rect.height / 2;
-  vscode.postMessage({
-    type: 'reorderCard',
-    id:       dragId,
-    targetId: target.dataset.id,
-    before,
-  });
+  if (target.closest('.col')?.dataset.col !== dragSourceCol) { return; }
+  const rect = target.getBoundingClientRect();
+  vscode.postMessage({ type:'reorderCard', id:dragId, targetId:target.dataset.id, before: e.clientY < rect.top + rect.height/2 });
 }
 </script>
 </body>
 </html>`;
 }
 
+// ── HTML content builder (returns inner HTML string only) ─────────────────────
+
+export function getBoardContent(
+	prd: Prd | null,
+	memories: string | null,
+	logs: Record<string, TaskLog>,
+	cfg: BoardConfig
+): string {
+	if (!prd) { return emptyState(); }
+	const bar = statsBar(prd, cfg);
+	if (cfg.view === 'history') { return bar + historyView(logs); }
+	if (cfg.view === 'epic')    { return bar + epicView(prd, logs); }
+	return bar + boardView(prd, logs, cfg.autoRun) + guardrailsPanel(cfg.guardrails, cfg.boundaries) + (memories ? memoriesPanel(memories) : '');
+}
+
+// ── Keep getKanbanHtml as alias for compatibility ─────────────────────────────
+export function getKanbanHtml(
+	prd: Prd | null,
+	memories: string | null,
+	logs: Record<string, TaskLog> = {},
+	cfg: BoardConfig = { autoRun: false, maxLoops: 5, guardrails: [], boundaries: [], view: 'board' }
+): string {
+	// This is now only used for the initial shell load
+	return getShellHtml();
+}
+
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function esc(s: string): string {
 	return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+const PRIORITY_DOT: Record<string, string> = { P0:'#f85149', P1:'#e3b341', P2:'#58a6ff', P3:'#6e7681' };
+const PRIORITY_LABEL: Record<string, string> = { P0:'Critical', P1:'High', P2:'Medium', P3:'Low' };
+
+function card(issue: Issue, log: TaskLog | null): string {
+	const pc = PRIORITY_DOT[issue.priority] ?? '#6e7681';
+	const pl = PRIORITY_LABEL[issue.priority] ?? issue.priority;
+	const deps = issue.dependencies?.length ? `<div class="card-deps">⛓ ${issue.dependencies.join(', ')}</div>` : '';
+	const epic = issue.epic ? `<span class="card-epic">${esc(issue.epic)}</span>` : '';
+	const labels = (issue.labels ?? []).map(l => `<span class="card-label">${esc(l)}</span>`).join('');
+
+	let logBadge = '';
+	if (log?.status === 'completed' && log.durationMin !== undefined) {
+		logBadge = `<span class="log-badge log-done">✓ ${log.durationMin}m</span>`;
+	} else if (log?.status === 'inprogress') {
+		logBadge = `<span class="log-badge log-running log-waiting">⏱ waiting…</span>`;
+	}
+
+	const noteText = log?.note || log?.summary || '';
+	const noteHtml = noteText ? `<div class="card-summary">${esc(noteText.slice(0,140))}${noteText.length>140?'…':''}</div>` : '';
+
+	const criteriaCount = issue.acceptanceCriteria?.length ?? 0;
+	const criteriaTooltip = criteriaCount > 0 ? issue.acceptanceCriteria.map((ac,i) => `${i+1}. ${ac}`).join('\n') : '';
+
+	let actions = '';
+	if (issue.status === 'todo')        { actions = `<button class="btn btn-run" onclick="send('runTask','${issue.id}')">▶ Run</button>`; }
+	else if (issue.status === 'blocked'){ actions = `<button class="btn btn-disabled" disabled>⛓ Blocked</button>`; }
+	else if (issue.status === 'inprogress') { actions = `<button class="btn btn-done" onclick="send('markDone','${issue.id}')">✓ Mark done</button>`; }
+	else { actions = `<button class="btn btn-note" onclick="send('addNote','${issue.id}')" title="Add note">✎</button><button class="btn btn-reset" onclick="send('resetTask','${issue.id}')">↩ Reset</button>`; }
+
+	return `<div class="card" draggable="true" data-id="${issue.id}" data-status="${issue.status}"
+     ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"
+     ondragover="onCardDragOver(event)" ondrop="onCardDrop(event)">
+  <div class="card-header">
+    <div class="card-header-left"><span class="card-id">${esc(issue.id)}</span>${epic}${labels}</div>
+    <div class="card-header-right"><span class="priority-dot" style="background:${pc}" title="${pl}"></span>${logBadge}</div>
+  </div>
+  <div class="card-title" onclick="send('showEditIssue','${issue.id}')" title="Click to edit">${esc(issue.title)}</div>
+  ${issue.description ? `<div class="card-desc">${esc(issue.description.slice(0,100))}${issue.description.length>100?'…':''}</div>` : ''}
+  ${noteHtml}${deps}
+  <div class="card-footer">
+    <span class="card-criteria${criteriaTooltip?' has-tooltip':''}"${criteriaTooltip?` data-tooltip="${esc(criteriaTooltip)}"`:''}>
+      ${criteriaCount} criteria${criteriaCount>0?' 👁':''}
+    </span>
+    ${actions}
+  </div>
+</div>`;
+}
+
+function boardView(prd: Prd, logs: Record<string, TaskLog>, autoRun: boolean): string {
+	const cols = [
+		{ key:'todo',       label:'To Do',       color:'#58a6ff' },
+		{ key:'inprogress', label:'In Progress',  color:'#e3b341' },
+		{ key:'completed',  label:'Done',         color:'#3fb950' },
+		{ key:'blocked',    label:'Blocked',      color:'#f85149' },
+	];
+	return `<div class="board">${cols.map(col => {
+		const issues = prd.issues.filter(i => i.status === col.key);
+		const cards  = issues.map(i => card(i, logs[i.id] ?? null)).join('');
+		return `<div class="col" data-col="${col.key}"
+      ondragover="onDragOver(event)" ondragenter="onDragEnter(event)"
+      ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+  <div class="col-header">
+    <span class="col-title" style="color:${col.color}">${col.label}</span>
+    <span class="col-count">${issues.length}</span>
+  </div>
+  <div class="col-body">${cards || '<div style="color:var(--text2);font-size:11px;text-align:center;padding:20px 0">Drop here</div>'}</div>
+</div>`;
+	}).join('')}</div>`;
+}
+
+function epicView(prd: Prd, logs: Record<string, TaskLog>): string {
+	const epics = [...new Set(prd.issues.map(i => i.epic || 'General'))];
+	return epics.map(epic => {
+		const issues = prd.issues.filter(i => (i.epic || 'General') === epic);
+		const done   = issues.filter(i => i.status === 'completed').length;
+		return `<div class="epic-group">
+  <div class="epic-group-header">
+    <span class="epic-group-title">${esc(epic)}</span>
+    <span class="epic-progress">${done}/${issues.length}</span>
+  </div>
+  <div class="epic-cards">${issues.map(i => card(i, logs[i.id]??null)).join('')}</div>
+</div>`;
+	}).join('');
+}
+
+function historyView(logs: Record<string, TaskLog>): string {
+	const items = Object.values(logs).filter(l => l.completedAt).sort((a,b) => (b.completedAt??'').localeCompare(a.completedAt??''));
+	if (!items.length) { return '<div style="padding:20px;color:var(--text2);text-align:center">No completed tasks yet</div>'; }
+	return `<div style="padding:10px;overflow-x:auto"><table class="history-table">
+<thead><tr><th>ID</th><th>Title</th><th>Duration</th><th>Date</th><th>Note</th></tr></thead>
+<tbody>${items.map(l => `<tr>
+  <td><span class="card-id">${esc(l.id)}</span></td>
+  <td>${esc(l.title||l.id)}</td>
+  <td><span class="dur-badge">${l.durationMin??'?'}m</span></td>
+  <td style="color:var(--text2);font-size:11px">${(l.completedAt??'').slice(0,10)}</td>
+  <td style="color:var(--text2);font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis">${esc(l.note||l.summary||'')}</td>
+</tr>`).join('')}</tbody></table></div>`;
+}
+
+function statsBar(prd: Prd, cfg: BoardConfig): string {
+	const stats   = { total: prd.issues.length, completed: prd.issues.filter(i=>i.status==='completed').length };
+	const pct     = stats.total ? Math.round((stats.completed/stats.total)*100) : 0;
+	const epics   = [...new Set(prd.issues.map(i=>i.epic).filter(Boolean))];
+	const views   = [['board','⊞ Board'],['epic','⬡ Epic'],['history','📋 History']] as const;
+	const viewBtns = views.map(([v,l]) => `<button class="btn btn-sm ${cfg.view===v?'btn-view-active':''}" onclick="send('setView','${v}')">${l}</button>`).join('');
+	const runnerBtn = cfg.autoRun
+		? `<button class="btn btn-sm btn-runner-on" onclick="send('stopRunner')">⏹ Stop</button>`
+		: `<button class="btn btn-sm btn-runner-off" onclick="send('startRunner')">⚡ Auto-run</button>`;
+
+	return `<div class="stats-bar">
+  <div class="stats-top">
+    <span class="project-title">${esc(prd.project)}</span>
+    <span class="project-desc">${esc(prd.description||'')}</span>
+    <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+    <span class="progress-pct">${stats.completed}/${stats.total} ${pct}%</span>
+  </div>
+  <div class="epics-row">${epics.map(e=>`<span class="epic-chip">${esc(e!)}</span>`).join('')}</div>
+  <div class="stats-actions">
+    <div class="view-switcher">${viewBtns}</div>
+    ${runnerBtn}
+    <button class="btn btn-sm btn-github" onclick="send('pushToGitHub')" title="Push to GitHub">⬆ GitHub</button>
+    <button class="btn btn-sm btn-github" onclick="send('syncFromGitHub')" title="Sync from GitHub">⬇ Sync</button>
+    <button class="btn btn-sm btn-add" onclick="send('showAddIssue')" title="Add new issue">＋ Issue</button>
+    <button class="btn btn-sm btn-add" onclick="send('addFromChat')" title="Add via Chat">＋ Chat</button>
+    <button class="btn btn-sm" onclick="send('openPrd')" title="Edit prd.json">📄 PRD</button>
+    <button class="btn btn-sm" onclick="send('openMemories')">🧠 Memory</button>
+    <button class="btn btn-sm" onclick="send('importPlan')" title="Import or append from Plan">⬇ Plan</button>
+    <button class="btn btn-sm btn-setup" onclick="send('setupProject')" title="Generate AGENTS.md and plans/">⚙ Agents</button>
+    <button class="btn btn-sm" onclick="send('openSettings')">⚙</button>
+    <button class="btn btn-sm" onclick="send('refresh')">↻</button>
+  </div>
+</div>`;
+}
+
+function guardrailsPanel(guardrails: string[], boundaries: string[]): string {
+	if (!guardrails.length && !boundaries.length) { return ''; }
+	return `<details class="guardrails-panel">
+  <summary>🛡 Guardrails & Boundaries</summary>
+  <div class="guardrails-body">
+    ${guardrails.length ? `<div class="guardrails-section"><div class="guardrails-label">Rules</div>${guardrails.map(g=>`<div class="guardrail-item">• ${esc(g)}</div>`).join('')}</div>` : ''}
+    ${boundaries.length ? `<div class="guardrails-section"><div class="guardrails-label">Never touch</div>${boundaries.map(b=>`<div class="guardrail-item boundary-item">🚫 ${esc(b)}</div>`).join('')}</div>` : ''}
+    <button class="btn btn-sm" onclick="send('openSettings')" style="margin-top:6px">Edit in settings</button>
+  </div>
+</details>`;
+}
+
+function memoriesPanel(memories: string): string {
+	return `<details class="memories-panel">
+  <summary>🧠 Project Memory <span class="mem-hint">(edit in .agent/memories.md)</span></summary>
+  <pre class="memories-content">${esc(memories)}</pre>
+</details>`;
+}
+
+function emptyState(): string {
+	return `<div class="empty-state">
+  <div class="empty-icon">🚀</div>
+  <div class="empty-title">No prd.json found</div>
+  <div class="empty-sub">Generate one from a project description or import a Plan.</div>
+  <div style="display:flex;gap:8px;margin-top:8px">
+    <button class="btn btn-primary" onclick="send('initProject')">Init Project</button>
+    <button class="btn btn-primary" onclick="send('importPlan')" style="background:#1f6feb;border-color:#1f6feb">⬇ Import Plan</button>
+  </div>
+  <div class="empty-hint">Or place a <code>prd.json</code> in the workspace root</div>
+</div>`;
 }

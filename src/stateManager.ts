@@ -48,14 +48,19 @@ export class RalphStateManager {
 	}
 
 	// ── Status ───────────────────────────────────────────────────────────────
-	static setInProgress(root: string, id: string, title = '') {
+	static setInProgress(root: string, id: string, title?: string) {
 		this.ensure(root);
 		fs.writeFileSync(this.statusPath(root, id), 'inprogress', 'utf-8');
 
-		// Create log entry
+		// Create or update log entry — preserve existing title if not provided
+		const lp = this.logPath(root, id);
+		let existingTitle = title ?? '';
+		if (!existingTitle && fs.existsSync(lp)) {
+			try { existingTitle = JSON.parse(fs.readFileSync(lp, 'utf-8')).title ?? ''; } catch { /**/ }
+		}
 		const log: TaskLog = {
 			id,
-			title,
+			title: existingTitle,
 			status: 'inprogress',
 			startedAt: new Date().toISOString(),
 		};

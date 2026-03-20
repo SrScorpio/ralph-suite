@@ -57,6 +57,14 @@ function normalizePriority(raw: number | string | undefined): 'P0' | 'P1' | 'P2'
 	return 'P2';
 }
 
+function normalizeStatus(raw: string | undefined): Issue['status'] {
+	const s = (raw ?? 'todo').toLowerCase().trim();
+	if (s === 'inprogress' || s === 'in_progress' || s === 'in-progress') { return 'inprogress'; }
+	if (s === 'completed'  || s === 'done')  { return 'completed'; }
+	if (s === 'blocked')   { return 'blocked'; }
+	return 'todo';
+}
+
 function normalizeItem(raw: RawItem): Issue {
 	return {
 		id:                 raw.id,
@@ -64,7 +72,7 @@ function normalizeItem(raw: RawItem): Issue {
 		description:        raw.description ?? '',
 		epic:               raw.epic,
 		priority:           normalizePriority(raw.priority),
-		status:             'todo',
+		status:             normalizeStatus(raw.status),
 		acceptanceCriteria: raw.acceptanceCriteria ?? [],
 		dependencies:       raw.dependencies ?? [],
 		labels:             raw.labels ?? [],
