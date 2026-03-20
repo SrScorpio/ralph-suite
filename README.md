@@ -1,7 +1,7 @@
 # Ralph Suite — VSCode Extension
 
 Autonomous AI task runner with Kanban board, project memory and multi-engine support.  
-Inspired by the RALPH Wiggum technique. Designed for VSCode without CLI dependencies.
+Inspired by the [RALPH Wiggum technique](https://github.com/badlogic/lemmy/issues/2). Designed for VSCode without CLI dependencies.
 
 ---
 
@@ -19,21 +19,47 @@ npm run compile
 
 # 4. Package as .vsix
 npm run package
-# → creates ralph-suite-0.1.0.vsix
+# → creates ralph-suite-X.X.X.vsix
 
 # 5. Install in VSCode
 # Extensions panel → ⋯ → Install from VSIX → select the file
 ```
 
+Or download the latest `.vsix` directly and install from VSIX.
+
 ---
 
 ## Quick Start
 
-1. Open a project in VSCode
-2. Press `Ctrl+Shift+R` (or Command Palette → **Ralph: Open Board**)
-3. If no `prd.json` exists → click **Init Project** → describe your goal in Chat
-4. Once `prd.json` is created, click **↻ Refresh** on the board
-5. Click **▶ Run** on any issue to send it to the AI chat
+1. Open a project folder in VSCode
+2. Click the `$(layout-panel) Ralph` button in the status bar — or `Ctrl+Shift+R` / `Cmd+Shift+R`
+3. If no `prd.json` exists → click **Init Project** → describe your project goal in Chat
+4. The AI will ask clarifying questions and generate all project files in one session
+5. Once `prd.json` appears, the board loads automatically
+6. Click **▶ Run** on any issue to send it to the AI chat
+
+---
+
+## Project files
+
+Ralph Suite creates and manages these files in your workspace:
+
+```
+prd.json                    ← task backlog (committed to git)
+AGENTS.md                   ← agent manual: role, rules, checkpoints
+.github/
+  copilot-instructions.md   ← auto-read by Copilot, references AGENTS.md
+plans/
+  arquitectura.md           ← architecture decisions and conventions
+  seguridad.md              ← security rules, secrets, auth
+  decisiones.md             ← ADR log (why X was chosen over Y)
+.agent/
+  memories.md               ← accumulated project knowledge (committed)
+.ralph/                     ← runtime state — gitignored automatically
+  task-ID-status            ← inprogress | completed
+  task-ID-log.json          ← duration, note, timestamps
+  task-ID-note              ← signal file from agent (consumed immediately)
+```
 
 ---
 
@@ -61,14 +87,71 @@ npm run package
 ```
 
 **Priority:** `P0` (critical) → `P1` (high) → `P2` (medium) → `P3` (low)  
-**Status:** managed automatically via `.ralph/` — don't edit manually
+**Status:** managed automatically via `.ralph/` — do not edit manually  
+**Dependencies:** array of issue IDs — blocked automatically until all deps are completed  
+**Also supports** the `userStories[]` format from ralph-runner (numeric priorities auto-normalized)
+
+---
+
+## Board views
+
+### Board (⊞)
+Four columns with drag-and-drop between columns and reorder within columns:
+
+| Column | Meaning |
+|--------|---------|
+| **To Do** | Pending, ready to run |
+| **In Progress** | Currently being executed by the agent |
+| **Done** | Completed — shows duration badge |
+| **Blocked** | Waiting on unresolved dependencies (automatic) |
+
+### Epic (⬡)
+Tasks grouped by epic with per-epic progress bars.
+
+### History (📋)
+Table of all completed tasks with duration, completion date, and note.
+
+---
+
+## Stats bar buttons
+
+| Button | Action |
+|--------|--------|
+| ⚡ Auto-run | Start autonomous task loop |
+| ⏹ Stop | Stop the runner |
+| ＋ Issue | Add a new issue via modal form |
+| ＋ Chat | Add issues via natural language in Chat |
+| 📄 PRD | Open prd.json in editor |
+| 🧠 Memory | Open .agent/memories.md |
+| ⬇ Plan | Import / append from Plan agent markdown |
+| ⚙ Agents | Generate or regenerate AGENTS.md and plans/ |
+| ⚙ | Settings |
+| ↻ | Refresh board |
+
+---
+
+## Quick menu
+
+Click the `$(layout-panel) Ralph` button in the status bar to open the quick menu with all actions. Shows project name and progress % when prd.json exists.
+
+---
+
+## Completion protocol
+
+The agent must write two signal files when a task is done:
+
+```
+1. Write `completed` → .ralph/task-<ID>-status
+2. Write `NOTA: <one line summary>` → .ralph/task-<ID>-note
+```
+
+Ralph Suite detects these files via watcher, updates the board, and appends the note to `.agent/memories.md` automatically.
 
 ---
 
 ## Memory system
 
-Create `.agent/memories.md` in your project root.  
-The agent reads this on every task — use it for:
+`.agent/memories.md` is committed to git and injected into every task prompt. Use it for:
 
 ```markdown
 # Project Memories
@@ -83,41 +166,100 @@ The agent reads this on every task — use it for:
 
 ## Known issues
 - Legacy /old-api path is deprecated, use /v2
+
+## [2026-03-20] ISSUE-001: Setup base structure
+- **Duration:** 12 min
+- **Note:** Created plugin skeleton with admin menu and REST endpoint stubs
 ```
 
-Click **🧠 Memories** on the board to edit it directly.
+Notes from completed tasks are appended automatically. Click **🧠 Memory** on the board to edit freely.
+
+---
+
+## AGENTS.md
+
+Generated by **⚙ Agents** from your Settings config. Defines the agent's role, rules, checkpoints and completion protocol. Editable — regenerate anytime to apply Settings changes.
+
+Configure in `Ctrl+,` → Ralph Suite:
+- `ralph-suite.agentRole` — role description (e.g. "Senior WordPress Developer")
+- `ralph-suite.agentStack` — tech stack comma-separated (e.g. "PHP 8.1, WordPress, MySQL")
+- `ralph-suite.agentProject` — short project description
+- `ralph-suite.agentCheckpoints` — actions requiring confirmation before execution
 
 ---
 
 ## Configuration
 
-`Ctrl+,` → search **Ralph Suite**
+`Ctrl+,` → search **ralph-suite**
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `ralph-suite.engine` | `copilot` | AI engine: `copilot`, `claude`, `opencode` |
-| `ralph-suite.maxLoops` | `5` | Max tasks per run session |
-| `ralph-suite.autoRun` | `false` | Auto-start next task on completion |
-| `ralph-suite.guardrails` | (see below) | Rules injected in every prompt |
-| `ralph-suite.boundaries` | `[]` | Paths the agent must never touch |
+| `agentRole` | `Senior Software Engineer` | Role injected into AGENTS.md |
+| `agentStack` | `` | Tech stack for AGENTS.md |
+| `agentProject` | `` | Project description for AGENTS.md |
+| `agentCheckpoints` | (list) | Actions requiring confirmation |
+| `maxLoops` | `5` | Max tasks per auto-run session |
+| `freshContext` | `true` | Open new chat window per task |
+| `taskTimeoutMs` | `600000` | Max ms to wait per task (10 min) |
+| `taskRetries` | `1` | Retries before marking as failed |
+| `minWaitMs` | `15000` | Min wait before polling for completion |
+| `pollIntervalMs` | `5000` | How often to check for completion |
+| `guardrails` | (14 rules) | Rules injected in every task prompt |
+| `boundaries` | `[]` | Paths the agent must never touch |
 
-Default guardrails:
+### Default guardrails
+
 - Never modify prd.json
-- Never delete files without confirmation  
+- Never delete files without confirmation
 - Always include tests for new features
+- Task states must be exactly: todo | inprogress | completed | blocked
+- When a task is finished, write the completion signal and wait — do not generate extra questions
+- Always read `.agent/memories.md` before starting any task
+- Never commit secrets, API keys, tokens or passwords — use environment variables
+- Always validate and sanitize user inputs
+- Run existing tests before marking a task as completed
+- Security checkpoints required for: auth changes, file deletions, DB schema changes, dependency upgrades
+- All new code must follow conventions already present in the codebase
+- Log important decisions in `.agent/memories.md`
+- Never use placeholders or TODO comments in production code
+- If blocked, write a clear explanation in the note signal — do not silently timeout
 
 ---
 
-## Board columns
+## GitHub integration
 
-| Column | Meaning |
-|--------|---------|
-| **To Do** | Pending, ready to run |
-| **In Progress** | Currently being executed |
-| **Done** | Completed (with ✓ Done button) |
-| **Blocked** | Waiting on dependencies |
+**⬆ GitHub** — sends a prompt to Copilot Chat that creates GitHub Issues for all pending issues via MCP, with labels, acceptance criteria checklist, and a `Ralph Suite ID: ISSUE-NNN` reference in the body.
 
-Issues with unresolved dependencies auto-move to **Blocked**.
+**⬇ Sync** — sends a prompt that reads closed/assigned GitHub Issues and writes the corresponding `.ralph/task-*-status` files back locally, syncing the board.
+
+Requires the GitHub MCP connector enabled in VSCode.
+
+---
+
+## Init Project flow
+
+1. Click **Init Project** (board or quick menu)
+2. Describe your project goal in the input box
+3. Chat opens with a structured prompt that asks clarifying questions
+4. Once you've answered, the agent generates all 6 files in one go:
+   - `AGENTS.md` — agent manual with your guardrails and checkpoints
+   - `.github/copilot-instructions.md` — references AGENTS.md
+   - `plans/arquitectura.md` — architecture decisions
+   - `plans/seguridad.md` — security rules and secrets
+   - `plans/decisiones.md` — ADR decision log
+   - `prd.json` — initial task backlog
+5. Board detects `prd.json` creation and opens automatically
+
+---
+
+## Import Plan
+
+If you have a Plan agent markdown file (from Copilot's `/plan` command):
+
+1. Open the markdown file in the editor — or use the file picker
+2. Click **⬇ Plan** on the board
+3. If `prd.json` exists → choose **Append** or **Overwrite**
+4. Steps are parsed into issues with sequential dependencies and epic auto-detection
 
 ---
 
@@ -127,11 +269,16 @@ Issues with unresolved dependencies auto-move to **Blocked**.
 
 ---
 
-## Roadmap
+## Architecture notes
 
-- [ ] Drag-and-drop between columns
-- [ ] Atlassian MCP integration (import from Jira)
-- [ ] GitHub Issues sync
-- [ ] Multi-engine selector per task
-- [ ] Sprint view (group by epic)
-- [ ] Auto-run loop with configurable max iterations
+- No CLI dependencies — runs entirely inside VSCode
+- WebviewPanel with shell + postMessage architecture (shell loaded once, data updated via messages)
+- File watchers on `.ralph/` detect agent completion signals in real time
+- `.ralph/` is gitignored automatically — only `prd.json` and `.agent/memories.md` are committed
+- Compatible with Copilot Chat, Claude, and any chat engine accessible via `workbench.action.chat.open`
+
+---
+
+## Version
+
+Current: **1.6.3** — see [CHANGELOG.md](CHANGELOG.md) for full history.
