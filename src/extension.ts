@@ -8,7 +8,7 @@ import { PrdManager } from './prdManager';
 export function activate(context: vscode.ExtensionContext) {
 	const output = vscode.window.createOutputChannel('Ralph Suite');
 	context.subscriptions.push(output);
-	output.appendLine('[Ralph] ===== ACTIVATING v1.6.3 =====');
+	output.appendLine('[Ralph] ===== ACTIVATING v1.6.5 =====');
 	output.show(); // Force show output on activation
 
 	const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -403,9 +403,11 @@ function buildPrompt(task: any, prd: any, workspaceRoot: string): string {
 		'⚠️ Do NOT modify prd.json.',
 		'',
 		'━━━ COMPLETION SIGNALS (both required) ━━━',
-		`1. Write \`completed\` to: ${statusFile}`,
-		`2. Write \`NOTA: <summary>\` to: ${noteFile}`,
-		'Do NOT skip either step.',
+		`1. Write (overwrite, not append) the single word \`completed\` to: ${statusFile}`,
+		`   The file must contain ONLY the word "completed" — nothing else, no extra lines.`,
+		`2. Write \`NOTA: <one line summary>\` to: ${noteFile}`,
+		`   Example: NOTA: Created plugin skeleton with admin menu and REST endpoint stubs`,
+		'Do NOT skip either step. Do NOT append — overwrite.',
 	].filter(Boolean).join('\n');
 }
 
@@ -447,8 +449,9 @@ ${checkpointList}
 - plans/decisiones.md
 
 ## Completion protocol
-1. Write \`completed\` to .ralph/task-<ID>-status
-2. Write \`NOTA: <summary>\` to .ralph/task-<ID>-note
+1. Overwrite (not append) .ralph/task-<ID>-status with the single word: completed
+   The file must contain ONLY that word — no extra lines, no other content.
+2. Write NOTA: <one line summary> to .ralph/task-<ID>-note
 Then stop. No follow-up questions.
 \`\`\`
 
@@ -530,7 +533,8 @@ ${checkpointList}
 - \`prd.json\` — task backlog
 
 ## Completion protocol
-1. Write \`completed\` → \`.ralph/task-<ID>-status\`
+1. Overwrite (not append) \`.ralph/task-<ID>-status\` with the single word: \`completed\`
+   File must contain ONLY that word — no extra lines, no other content.
 2. Write \`NOTA: <one line summary>\` → \`.ralph/task-<ID>-note\`
 Then stop and wait. Do not ask follow-up questions.
 

@@ -116,7 +116,15 @@ export class RalphStateManager {
 	static getStatus(root: string, id: string): 'todo' | 'inprogress' | 'completed' | 'blocked' {
 		const p = this.statusPath(root, id);
 		if (!fs.existsSync(p)) { return 'todo'; }
-		const v = fs.readFileSync(p, 'utf-8').trim();
+		// Read first non-empty line only — agent may accidentally append multiple lines
+		const v = fs.readFileSync(p, 'utf-8')
+			.split(/\r?\n/)
+			.map(l => l.trim())
+			.filter(Boolean)[0] ?? '';
+		// Also sanitize the file if it has multiple lines — keep only first line
+		if (fs.readFileSync(p, 'utf-8').includes('\n')) {
+			fs.writeFileSync(p, v, 'utf-8');
+		}
 		if (v === 'inprogress') { return 'inprogress'; }
 		if (v === 'completed')  { return 'completed'; }
 		return 'todo';

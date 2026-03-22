@@ -1,8 +1,8 @@
 {
   "name": "ralph-suite",
-  "displayName": "Ralph Suite",
-  "description": "Autonomous AI task runner with Kanban board, memory and multi-engine support",
-  "version": "1.6.3",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
+  "version": "1.6.5",
   "publisher": "ralph-suite",
   "engines": {
     "vscode": "^1.90.0"
@@ -91,34 +91,34 @@
             "opencode"
           ],
           "default": "copilot",
-          "description": "AI engine to use for task execution"
+          "description": "%config.engine.description%"
         },
         "ralph-suite.maxLoops": {
           "type": "number",
           "default": 5,
           "minimum": 1,
           "maximum": 50,
-          "description": "Max tasks per run session"
+          "description": "%config.maxLoops.description%"
         },
         "ralph-suite.autoRun": {
           "type": "boolean",
           "default": false,
-          "description": "Automatically start next task when one completes"
+          "description": "%config.autoRun.description%"
         },
         "ralph-suite.freshContext": {
           "type": "boolean",
           "default": true,
-          "description": "Open a new chat window for each task (fresh context, no history bleeding between tasks). Recommended: true."
+          "description": "%config.freshContext.description%"
         },
         "ralph-suite.prdPath": {
           "type": "string",
           "default": "prd.json",
-          "description": "Path to prd.json relative to workspace root"
+          "description": "%config.prdPath.description%"
         },
         "ralph-suite.memoriesPath": {
           "type": "string",
           "default": ".agent/memories.md",
-          "description": "Path to project memories file"
+          "description": "%config.memoriesPath.description%"
         },
         "ralph-suite.guardrails": {
           "type": "array",
@@ -141,7 +141,7 @@
             "Never use placeholders or TODO comments in production code \u2014 implement or leave existing code",
             "If blocked, write a clear explanation in the note signal \u2014 do not silently timeout"
           ],
-          "description": "Rules injected into every task prompt"
+          "description": "%config.guardrails.description%"
         },
         "ralph-suite.boundaries": {
           "type": "array",
@@ -149,47 +149,47 @@
             "type": "string"
           },
           "default": [],
-          "description": "Paths the agent must never touch (e.g. legacy/**, *.lock)"
+          "description": "%config.boundaries.description%"
         },
         "ralph-suite.taskTimeoutMs": {
           "type": "number",
           "default": 600000,
           "minimum": 30000,
-          "description": "Maximum time (ms) to wait for the agent to complete a task before timing out. Default: 10 minutes."
+          "description": "%config.taskTimeoutMs.description%"
         },
         "ralph-suite.taskRetries": {
           "type": "number",
           "default": 1,
           "minimum": 0,
           "maximum": 5,
-          "description": "Number of times to retry a task after timeout before marking it as failed. Default: 1."
+          "description": "%config.taskRetries.description%"
         },
         "ralph-suite.minWaitMs": {
           "type": "number",
           "default": 15000,
           "minimum": 0,
-          "description": "Minimum time (ms) to wait before starting to poll for task completion. Default: 15 seconds."
+          "description": "%config.minWaitMs.description%"
         },
         "ralph-suite.pollIntervalMs": {
           "type": "number",
           "default": 5000,
           "minimum": 1000,
-          "description": "How often (ms) to check if the agent has completed a task. Default: 5 seconds."
+          "description": "%config.pollIntervalMs.description%"
         },
         "ralph-suite.agentRole": {
           "type": "string",
           "default": "Senior Software Engineer",
-          "description": "Role of the AI agent \u2014 appears in AGENTS.md header"
+          "description": "%config.agentRole.description%"
         },
         "ralph-suite.agentStack": {
           "type": "string",
           "default": "",
-          "description": "Tech stack of the project (e.g. PHP 8.1, WordPress, Python 3.11, JavaScript). Used to personalise AGENTS.md."
+          "description": "%config.agentStack.description%"
         },
         "ralph-suite.agentProject": {
           "type": "string",
           "default": "",
-          "description": "Short project description for AGENTS.md context"
+          "description": "%config.agentProject.description%"
         },
         "ralph-suite.agentCheckpoints": {
           "type": "array",
@@ -204,7 +204,7 @@
             "Refactor more than 500 lines of code",
             "Change architecture documented in plans/"
           ],
-          "description": "Actions that require a checkpoint confirmation before executing"
+          "description": "%config.agentCheckpoints.description%"
         }
       }
     }
