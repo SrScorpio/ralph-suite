@@ -1,7 +1,6 @@
 {
   "extension.displayName": "Ralph Suite",
   "extension.description": "Autonomous AI task runner with Kanban board, project memory and multi-engine support.",
-
   "config.engine.description": "AI engine to use for task execution (copilot, claude, opencode).",
   "config.maxLoops.description": "Maximum number of tasks to execute per auto-run session before pausing.",
   "config.autoRun.description": "Automatically start the next task when the current one completes.",
@@ -14,8 +13,12 @@
   "config.taskRetries.description": "Number of times to retry a task after a timeout before marking it as failed. Default: 1.",
   "config.minWaitMs.description": "Minimum time in milliseconds to wait before starting to poll for task completion. Default: 15000 (15 seconds).",
   "config.pollIntervalMs.description": "How often in milliseconds to check whether the agent has completed a task. Default: 5000 (5 seconds).",
-  "config.agentRole.description": "Role of the AI agent — injected into AGENTS.md (e.g. Senior Software Engineer).",
+  "config.agentRole.description": "Role of the AI agent \u2014 injected into AGENTS.md (e.g. Senior Software Engineer).",
   "config.agentStack.description": "Tech stack of the project, comma-separated (e.g. PHP 8.1, WordPress, Python 3.11). Used to personalise AGENTS.md.",
   "config.agentProject.description": "Short description of the project for AGENTS.md context.",
-  "config.agentCheckpoints.description": "Actions that require a confirmation checkpoint before the agent executes them (e.g. delete files, modify DB schema)."
+  "config.agentCheckpoints.description": "Actions that require a confirmation checkpoint before the agent executes them (e.g. delete files, modify DB schema).",
+  "config.memoryOptimizeEvery.description": "Auto-optimize memories.md every N completed tasks (0 = disabled). When triggered, runs a compression pass before the next task.",
+  "config.memoryOptimizeReview.description": "When true, shows the optimization prompt in Chat so you can review before it runs. When false, the agent rewrites memories.md directly without confirmation.",
+  "config.memoryOptimizeAutoApply.description": "When auto-optimizing, apply the result directly to memories.md without review (true), or open in Chat so you can review first (false).",
+  "command.optimizeMemory.title": "Ralph: Optimize Project Memory"
 }

@@ -2,7 +2,7 @@
   "name": "ralph-suite",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.6.5",
+  "version": "1.6.8",
   "publisher": "ralph-suite",
   "engines": {
     "vscode": "^1.90.0"
@@ -48,6 +48,10 @@
       {
         "command": "ralph-suite.setupProject",
         "title": "Ralph: Setup Project (AGENTS.md + plans/)"
+      },
+      {
+        "command": "ralph-suite.optimizeMemory",
+        "title": "%command.optimizeMemory.title%"
       }
     ],
     "keybindings": [
@@ -205,6 +209,22 @@
             "Change architecture documented in plans/"
           ],
           "description": "%config.agentCheckpoints.description%"
+        },
+        "ralph-suite.memoryOptimizeEvery": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "description": "%config.memoryOptimizeEvery.description%"
+        },
+        "ralph-suite.memoryOptimizeReview": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.memoryOptimizeReview.description%"
+        },
+        "ralph-suite.memoryOptimizeAutoApply": {
+          "type": "boolean",
+          "default": false,
+          "description": "%config.memoryOptimizeAutoApply.description%"
         }
       }
     }

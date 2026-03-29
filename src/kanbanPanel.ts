@@ -16,6 +16,7 @@ export class KanbanPanel {
 
 	private autoRun    = false;
 	private loopCount  = 0;
+	private completedSinceOptimize = 0;  // tracks tasks completed since last memory optimization
 	private disposed   = false;
 	private runnerTimer: ReturnType<typeof setTimeout> | null = null;
 	private currentView: 'board' | 'epic' | 'history' = 'board';
@@ -51,7 +52,12 @@ export class KanbanPanel {
 		watch(new vscode.RelativePattern(this.root, '.ralph/task-*-status'), () => {
 			KanbanPanel.output?.appendLine('[Ralph] Status changed — refreshing');
 			this.render();
-			if (this.autoRun) { this.scheduleNextTask(3000); }
+			if (this.autoRun) {
+				// Check if a task just completed and if memory optimization is due
+				this.checkAutoOptimize().then(() => {
+					this.scheduleNextTask(3000);
+				});
+			}
 		});
 		// Agent writes -note file → process it into log.json + memories, then delete it
 		watch(new vscode.RelativePattern(this.root, '.ralph/task-*-note'), () => {
@@ -170,6 +176,30 @@ export class KanbanPanel {
 	}
 
 	// ── Runner ────────────────────────────────────────────────────────────────
+
+	private async checkAutoOptimize(): Promise<void> {
+		const cfg          = vscode.workspace.getConfiguration('ralph-suite');
+		const optimizeEvery = cfg.get<number>('memoryOptimizeEvery', 0);
+		if (optimizeEvery <= 0) { return; }
+
+		// Count completed tasks
+		const prd = PrdManager.load(this.root);
+		if (!prd) { return; }
+		const statuses   = RalphStateManager.getAllStatuses(this.root);
+		const totalDone  = prd.issues.filter(i => (statuses[i.id] ?? 'todo') === 'completed').length;
+
+		// Trigger if total completed is a multiple of optimizeEvery
+		// and we haven't already triggered at this count
+		if (totalDone > 0 && totalDone % optimizeEvery === 0 && totalDone !== this.completedSinceOptimize) {
+			this.completedSinceOptimize = totalDone;
+			KanbanPanel.output?.appendLine(`[Memory] Auto-optimize triggered after ${totalDone} completed tasks`);
+			vscode.window.showInformationMessage(`Ralph: optimizing memories.md after ${totalDone} completed tasks…`);
+			// Import here to avoid circular — call via command
+			await vscode.commands.executeCommand('ralph-suite.optimizeMemory');
+			// Wait a bit for the optimization to be sent to chat before next task
+			await new Promise(r => setTimeout(r, 2000));
+		}
+	}
 
 	private startRunner() {
 		const maxLoops = vscode.workspace.getConfiguration('ralph-suite').get<number>('maxLoops', 5);
@@ -527,6 +557,10 @@ export class KanbanPanel {
 				this.render();
 				break;
 			}
+
+			case 'optimizeMemory':
+				await vscode.commands.executeCommand('ralph-suite.optimizeMemory');
+				break;
 
 			case 'setupProject':
 				await vscode.commands.executeCommand('ralph-suite.setupProject');

@@ -63,6 +63,14 @@ code{background:var(--bg3);padding:1px 5px;border-radius:3px;font-family:var(--m
 .btn-github{background:rgba(139,148,158,.1);border-color:rgba(139,148,158,.3);color:var(--text2)}
 .btn-add{background:rgba(63,185,80,.1);border-color:rgba(63,185,80,.35);color:var(--green)}
 .btn-setup{background:rgba(227,179,65,.08);border-color:rgba(227,179,65,.3);color:var(--amber)}
+.btn-setup:hover{background:rgba(227,179,65,.18)!important}
+.btn-optimize{background:rgba(139,148,158,.08);border-color:rgba(139,148,158,.25);color:var(--text2)}
+.btn-optimize:hover{background:rgba(139,148,158,.18)!important;color:var(--text)!important}
+.btn-setup:hover{background:rgba(227,179,65,.18)!important}
+.btn-optimize{background:rgba(139,148,158,.08);border-color:rgba(139,148,158,.3);color:var(--text2)}
+.btn-optimize:hover{background:rgba(139,148,158,.18)!important;color:var(--text)!important}
+.btn-optimize{background:rgba(188,140,255,.08);border-color:rgba(188,140,255,.3);color:#bc8cff}
+.btn-optimize:hover{background:rgba(188,140,255,.18)!important}
 .btn-runner-on{background:rgba(248,81,73,.12);border-color:rgba(248,81,73,.4);color:var(--red)}
 .btn-runner-off{background:rgba(227,179,65,.1);border-color:rgba(227,179,65,.35);color:var(--amber)}
 .btn-view-active{background:var(--bg);border-color:var(--blue);color:var(--blue)}
@@ -488,6 +496,7 @@ function statsBar(prd: Prd, cfg: BoardConfig): string {
     <button class="btn btn-sm btn-add" onclick="send('addFromChat')" title="Add via Chat">＋ Chat</button>
     <button class="btn btn-sm" onclick="send('openPrd')" title="Edit prd.json">📄 PRD</button>
     <button class="btn btn-sm" onclick="send('openMemories')">🧠 Memory</button>
+    <button class="btn btn-sm btn-optimize" onclick="send('optimizeMemory')" title="Optimize memories.md — compress and remove duplicates">🧹 Optimize</button>
     <button class="btn btn-sm" onclick="send('importPlan')" title="Import or append from Plan">⬇ Plan</button>
     <button class="btn btn-sm btn-setup" onclick="send('setupProject')" title="Generate AGENTS.md and plans/">⚙ Agents</button>
     <button class="btn btn-sm" onclick="send('openSettings')">⚙</button>
