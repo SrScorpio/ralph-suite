@@ -1,0 +1,138 @@
+{
+  "project": "ralph-suite",
+  "description": "Gestor Kanban y runner para agentes locales en VS Code.",
+  "version": "1.0.0",
+  "issues": [
+    {
+      "id": "ISSUE-001",
+      "title": "Context Refresh mid-task",
+      "description": "Botón en la card In Progress que manda al chat un prompt de recuperación de contexto. Útil cuando el agente se pierde en conversaciones largas.",
+      "epic": "UI",
+      "priority": "P0",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Botón visible en la card In Progress",
+        "Al pulsarlo, se envía al chat un prompt con el contexto actual y el log resumido",
+        "No incluir automáticamente la sección 'Task History' completa en el prompt",
+        "Añadir tests que verifiquen la acción y el payload enviado al agente",
+        "Crear commit final: 'feat: ISSUE-001 Context Refresh'"
+      ],
+      "dependencies": ["ISSUE-002"],
+      "labels": ["feature", "ui", "in-progress"]
+    },
+    {
+      "id": "ISSUE-002",
+      "title": "Task context injection inteligente",
+      "description": "Inyección de memoria por secciones para reducir el tamaño del contexto y mejorar relevancia (Core, Conventions, Decisions, Task History).",
+      "epic": "Core",
+      "priority": "P0",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Implementar inyección por secciones: Core y Conventions siempre; Decisions sólo si la tarea depende de ellas; Task History no inyectada automáticamente",
+        "Añadir configuración y documentación sobre la estructura de .agent/memories.md",
+        "Tests que validen qué secciones se incluyen según dependencias",
+        "Crear commit final: 'feat: ISSUE-002 Task context injection'"
+      ],
+      "dependencies": [],
+      "labels": ["feature", "core", "memory"]
+    },
+    {
+      "id": "ISSUE-003",
+      "title": "Task splitting automático",
+      "description": "Detectar tareas largas y sugerir dividirlas en subtareas; permitir crear issues nuevos automáticamente en prd.json.",
+      "epic": "Runner",
+      "priority": "P1",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Configurar 'ralph-suite.splitSuggestAfterMs' (0 = desactivado)",
+        "Cuando una tarea exceda el umbral, el runner sugiere dividirla y puede crear issues secundarios con IDs secuenciales",
+        "La tarea original queda marcada como epic parent de los nuevos issues",
+        "Tests que simulen timeout y verifiquen creación de issues en prd.json",
+        "Crear commit final: 'feat: ISSUE-003 Task splitting'"
+      ],
+      "dependencies": [],
+      "labels": ["feature", "runner"]
+    },
+    {
+      "id": "ISSUE-004",
+      "title": "Health score del proyecto",
+      "description": "Indicador visual calculado desde los logs existentes: % tareas completadas a tiempo, ratio de reintentos, tareas bloqueadas crónicas, tiempo medio por tarea.",
+      "epic": "UI",
+      "priority": "P2",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Implementar cálculo del health score a partir de .ralph/task-*-log.json",
+        "Mostrar badge o panel con métricas resumidas en el tablero",
+        "Tests que validen los cálculos sobre muestras de logs",
+        "Crear commit final: 'feat: ISSUE-004 Health score'"
+      ],
+      "dependencies": [],
+      "labels": ["feature", "ui", "stats"]
+    },
+    {
+      "id": "ISSUE-005",
+      "title": "Git checkpoint automático",
+      "description": "Antes de ejecutar tareas importantes, crear un checkpoint git (commit o stash) si el repositorio está inicializado.",
+      "epic": "Runner",
+      "priority": "P1",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Detectar si existe .git y ofrecer checkpoint cuando 'ralph-suite.gitCheckpoint' esté activado",
+        "Implementar 'git add -A && git commit -m \"ralph: checkpoint before ISSUE-XXX\"' o fallback a 'git stash' si falla",
+        "Documentar el comportamiento en plans/arquitectura.md y plans/seguridad.md",
+        "Tests que simulen repositorio git y verifiquen checkpoint",
+        "Crear commit final: 'feat: ISSUE-005 Git checkpoint'"
+      ],
+      "dependencies": [],
+      "labels": ["feature", "runner", "git"]
+    },
+    {
+      "id": "ISSUE-006",
+      "title": "Dependency graph visual",
+      "description": "Mostrar flechas SVG entre tareas que tienen dependencias dentro de la vista Epic para clarificar por qué hay bloqueos.",
+      "epic": "UI",
+      "priority": "P2",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Implementar render SVG simple que conecte cards con 'dependencies[]'",
+        "Sin dependencia de librerías externas pesadas",
+        "Tests UI que verifiquen líneas entre cards según datos de prd.json",
+        "Crear commit final: 'feat: ISSUE-006 Dependency graph'"
+      ],
+      "dependencies": [],
+      "labels": ["feature", "ui", "visual"]
+    },
+    {
+      "id": "ISSUE-007",
+      "title": "Prompt templates por tipo de tarea",
+      "description": "Detectar tipo de tarea por labels/epic y aplicar plantillas de prompt específicas (feature, bugfix, refactor, test, deploy).",
+      "epic": "Core",
+      "priority": "P1",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Implementar mapeo labels/epic -> plantilla de prompt",
+        "Detectar automáticamente el tipo y añadir instrucciones extra en el prompt",
+        "Tests que verifiquen la selección de plantilla según labels",
+        "Crear commit final: 'feat: ISSUE-007 Prompt templates'"
+      ],
+      "dependencies": ["ISSUE-002"],
+      "labels": ["feature", "core", "prompt"]
+    },
+    {
+      "id": "ISSUE-008",
+      "title": "Resumen de sesión automático",
+      "description": "Al parar el runner, consolidar una entrada en memories.md con tareas completadas, notas y estado del proyecto.",
+      "epic": "Core",
+      "priority": "P1",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Al detener el runner (stop manual o max loops), generar entrada en .agent/memories.md con: tareas completadas en la sesión, NOTA: signals, estado general (X/Y), fecha y duración",
+        "No duplicar información; usar logs existentes en .ralph/ para consolidar datos",
+        "Tests que verifiquen la creación y formato de la entrada",
+        "Crear commit final: 'feat: ISSUE-008 Session summary'"
+      ],
+      "dependencies": [],
+      "labels": ["feature", "core", "session"]
+    }
+  ]
+}
