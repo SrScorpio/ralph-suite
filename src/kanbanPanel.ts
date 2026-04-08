@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import { PrdManager, Issue, Prd } from './prdManager';
 import { RalphStateManager, TaskLog } from './stateManager';
 import { getShellHtml, getBoardContent, BoardConfig } from './webview/kanbanHtml';
+import { loadAndInjectContext } from './contextInjector';
 
 export class KanbanPanel {
 	public static readonly viewType = 'ralph-suite.kanban';
@@ -600,6 +601,27 @@ export class KanbanPanel {
 				this.render();
 				break;
 
+			case 'contextRefresh': {
+				const taskId = msg.id;
+				if (!taskId) { break; }
+				KanbanPanel.output?.appendLine(`[Board] Context refresh requested for ${taskId}`);
+				const prdCR = PrdManager.load(this.root);
+				if (!prdCR) { vscode.window.showErrorMessage('No prd.json found.'); break; }
+				const taskCR = prdCR.issues.find(i => i.id === taskId);
+				if (!taskCR) { vscode.window.showErrorMessage(`Task ${taskId} not found.`); break; }
+				const prompt = buildContextRefreshPrompt(this.root, taskCR, prdCR);
+				try {
+					await vscode.commands.executeCommand('workbench.action.chat.open', {
+						query: prompt, isPartialQuery: false
+					});
+				} catch {
+					await vscode.env.clipboard.writeText(prompt);
+					vscode.window.showInformationMessage('Context refresh prompt copied — paste in Copilot Chat.');
+				}
+				KanbanPanel.output?.appendLine(`[Board] Context refresh prompt sent for ${taskId}`);
+				break;
+			}
+
 			case 'log':
 				KanbanPanel.output?.appendLine(`[Board] ${msg.text}`);
 				break;
@@ -877,4 +899,72 @@ function buildAddFromChatPrompt(prd: Prd | null, prdPath: string): string {
 		`4. Do NOT modify any existing issues — only append`,
 		`5. Confirm what was added with a brief summary`,
 	].join('\n');
+}
+
+// ── Context Refresh prompt builder (ISSUE-001) ──────────────────────────────
+
+export function buildContextRefreshPrompt(
+	workspaceRoot: string,
+	task: Issue,
+	prd: Prd
+): string {
+	// Use ISSUE-002 intelligent context injection (excludes Task History)
+	const injection = loadAndInjectContext(
+		workspaceRoot,
+		task.description || '',
+		task.dependencies || [],
+		task.labels || [],
+		task.epic
+	);
+	const memory = injection ? injection.injected : '';
+
+	// Get current task log for summarized progress
+	const log = RalphStateManager.getLog(workspaceRoot, task.id);
+	const logSummary: string[] = [];
+	if (log) {
+		if (log.startedAt) { logSummary.push(`- Started at: ${log.startedAt}`); }
+		if (log.durationMin !== undefined) { logSummary.push(`- Duration so far: ${log.durationMin} min`); }
+		if (log.note) { logSummary.push(`- Last note: ${log.note}`); }
+		if (log.summary) { logSummary.push(`- Summary: ${log.summary}`); }
+	}
+
+	// Get overall project progress
+	const statuses = RalphStateManager.getAllStatuses(workspaceRoot);
+	const done = prd.issues.filter(i => (statuses[i.id] ?? 'todo') === 'completed').length;
+	const total = prd.issues.length;
+
+	const ralphDir = path.join(workspaceRoot, '.ralph').replace(/\\/g, '/');
+	const statusFile = `${ralphDir}/task-${task.id}-status`;
+	const noteFile = `${ralphDir}/task-${task.id}-note`;
+
+	return [
+		'## ⚡ Context Refresh — Mid-Task Recovery',
+		'',
+		'The agent may have lost context during a long conversation. Here is the full context to continue.',
+		'',
+		memory ? `## Project Memory\n${memory}\n` : '',
+		`## Current Task: ${task.id} — ${task.title}`,
+		`**Epic:** ${task.epic || 'General'}`,
+		`**Priority:** ${task.priority}`,
+		`**Description:** ${task.description}`,
+		'',
+		'**Acceptance Criteria:**',
+		...(task.acceptanceCriteria || []).map((ac: string, i: number) => `  ${i + 1}. ${ac}`),
+		task.dependencies?.length ? `\n**Depends on:** ${task.dependencies.join(', ')}` : '',
+		'',
+		`## Task Progress`,
+		`**Status:** In Progress`,
+		`**Project progress:** ${done}/${total} tasks completed`,
+		logSummary.length ? logSummary.join('\n') : '- No progress log yet',
+		'',
+		'---',
+		'Continue working on this task. Pick up where you left off.',
+		'⚠️ Do NOT modify prd.json.',
+		'',
+		'━━━ COMPLETION SIGNALS (both required) ━━━',
+		`1. Write (overwrite, not append) the single word \`completed\` to: ${statusFile}`,
+		'   The file must contain ONLY the word "completed" — nothing else, no extra lines.',
+		`2. Write \`NOTA: <one line summary>\` to: ${noteFile}`,
+		'Do NOT skip either step. Do NOT append — overwrite.',
+	].filter(Boolean).join('\n');
 }

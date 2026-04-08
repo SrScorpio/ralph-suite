@@ -133,6 +133,164 @@
       ],
       "dependencies": [],
       "labels": ["feature", "core", "session"]
+    },
+    {
+      "id": "ISSUE-009",
+      "title": "Paginación y lazy loading de tareas en webview",
+      "description": "El webview carga TODAS las tareas de prd.json + TODOS los archivos .ralph en un solo payload HTML/JS. Con muchos tasks (ej: 99 tareas, ~73 KB), el Service Worker de VS Code falla con 'InvalidStateError: The document is in an invalid state' y Ralph se queda en 'Loading...' infinitamente. Implementar paginación para renderizar solo N tareas activas inicialmente (ej: 20) y cargar el resto bajo demanda.",
+      "epic": "UI",
+      "priority": "P0",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "El webview renderiza un máximo configurable de tareas por página (default: 20) usando 'ralph-suite.maxTasksPerPage'",
+        "Implementar controles de paginación (anterior/siguiente) en la vista Kanban",
+        "Los archivos .ralph/* solo se leen bajo demanda (lazy loading), no todos de golpe al iniciar",
+        "Verificar que con 100+ tareas en prd.json el webview carga sin error de Service Worker",
+        "Tests unitarios de paginación con datos de prueba (100+ tareas)",
+        "Crear commit final: 'fix: ISSUE-009 Webview pagination and lazy loading'"
+      ],
+      "dependencies": [],
+      "labels": ["bug", "ui", "performance", "webview"]
+    },
+    {
+      "id": "ISSUE-010",
+      "title": "Ocultar tareas completadas por defecto",
+      "description": "Las tareas con status 'completed' se renderizan igual que las activas, inflando el payload del webview y haciendo difícil encontrar tareas pendientes. Implementar un filtro que oculte las completadas por defecto, con toggle para mostrarlas si se necesitan.",
+      "epic": "UI",
+      "priority": "P0",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Por defecto, las tareas con status 'completed' NO se renderizan en el Kanban",
+        "Añadir toggle/filtro 'Mostrar completadas' en la toolbar del webview",
+        "El contador de tareas muestra 'X activas / Y totales' para dar visibilidad",
+        "El filtro es persistente en la sesión (state en webview)",
+        "Tests que verifiquen el filtrado y el toggle",
+        "Crear commit final: 'feat: ISSUE-010 Hide completed tasks by default'"
+      ],
+      "dependencies": ["ISSUE-009"],
+      "labels": ["feature", "ui", "ux", "performance"]
+    },
+    {
+      "id": "ISSUE-011",
+      "title": "Graceful degradation para payloads grandes",
+      "description": "Cuando el payload del webview es demasiado grande (por mucho data en prd.json o .ralph/), el Service Worker crashea con un error genérico y Ralph se queda en 'Loading...' sin feedback al usuario. Implementar detección del tamaño del payload y un mensaje de error útil si se excede un umbral seguro.",
+      "epic": "Core",
+      "priority": "P1",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Calcular el tamaño estimado del payload antes de inyectarlo en el webview HTML",
+        "Si el payload excede un umbral seguro (ej: 500 KB), mostrar mensaje de advertencia en el webview con acciones sugeridas (archivar tareas, filtrar)",
+        "Capturar el error 'InvalidStateError' del Service Worker y mostrar un mensaje entendible en vez de 'Loading...' infinito",
+        "Loguear el tamaño del payload en el output channel para debugging",
+        "Tests que simulen payload grande y verifiquen el mensaje de error",
+        "Crear commit final: 'fix: ISSUE-011 Graceful degradation for large payloads'"
+      ],
+      "dependencies": ["ISSUE-009"],
+      "labels": ["bug", "core", "error-handling", "ux"]
+    },
+    {
+      "id": "ISSUE-012",
+      "title": "Auto-archivado de tareas completadas",
+      "description": "Las tareas completadas se acumulan en prd.json y .ralph/, inflando el payload del webview. Implementar un mecanismo que archive automáticamente las tareas completadas después de un tiempo configurable, moviéndolas a un archivo separado (archive/prd-archive.json) para que no afecten el rendimiento del webview.",
+      "epic": "Core",
+      "priority": "P2",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Crear archivo archive/prd-archive.json para almacenar tareas archivadas",
+        "Implementar archivado automático de tareas con status 'completed' más antiguas de N días (configurable: 'ralph-suite.archiveAfterDays', default: 30)",
+        "Comando manual 'Ralph: Archive completed tasks' para archivar bajo demanda",
+        "Limpiar archivos .ralph/task-*-status, *-log, *-note correspondientes al archivar (mover a archive/)",
+        "Las tareas archivadas no se cargan en el webview pero son consultables si se necesitan",
+        "Tests que verifiquen archivado automático y manual, y limpieza de archivos",
+        "Crear commit final: 'feat: ISSUE-012 Auto-archive completed tasks'"
+      ],
+      "dependencies": ["ISSUE-009"],
+      "labels": ["feature", "core", "maintenance", "performance"]
+    },
+    {
+      "id": "ISSUE-013",
+      "title": "Centralizar acceso al PRD con validacion y escritura atomica",
+      "description": "Consolidar en una sola capa la lectura, validacion y escritura de prd.json y rutas relacionadas para evitar escrituras dispersas, respetar configuraciones y reducir riesgo de corrupcion del backlog.",
+      "epic": "Core",
+      "priority": "P0",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Toda escritura de prd.json pasa por una unica API reutilizable en vez de accesos directos dispersos",
+        "La extension respeta las settings configurables de rutas para PRD y memorias donde aplique",
+        "Las escrituras usan validacion previa y un mecanismo atomico o con backup para evitar archivos corruptos",
+        "Los errores de lectura o guardado muestran feedback entendible y quedan registrados en el output channel",
+        "Añadir tests que cubran carga, validacion y persistencia del PRD"
+      ],
+      "dependencies": [],
+      "labels": ["feature", "core", "data-integrity", "source-of-truth", "config"]
+    },
+    {
+      "id": "ISSUE-014",
+      "title": "Hardening del webview con CSP y validacion de mensajes",
+      "description": "Reforzar la seguridad del webview con una Content Security Policy estricta, validacion explicita de mensajes y controles de render seguro para reducir la superficie de ataque y prevenir regresiones de seguridad.",
+      "epic": "Security",
+      "priority": "P0",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Definir una CSP estricta para el webview compatible con el funcionamiento actual de Ralph",
+        "Validar de forma explicita el shape y origen esperado de los mensajes intercambiados entre webview y extension host",
+        "Eliminar patrones de render inseguro o dejarlos encapsulados tras utilidades sanitizadas",
+        "Documentar las restricciones de seguridad relevantes en los planes existentes sin duplicar documentacion",
+        "Añadir tests o checks que verifiquen la presencia de CSP y la validacion de mensajes"
+      ],
+      "dependencies": [],
+      "labels": ["feature", "security", "webview", "hardening", "core"]
+    },
+    {
+      "id": "ISSUE-015",
+      "title": "Implementar soporte multi-engine real",
+      "description": "Convertir la configuracion de engine en una capacidad real del producto, con una abstraccion que resuelva diferencias entre proveedores, deteccion de capacidades y comportamiento consistente segun el motor seleccionado.",
+      "epic": "Core",
+      "priority": "P1",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "La setting ralph-suite.engine modifica el comportamiento real del flujo de ejecucion",
+        "Existe una capa de abstraccion para motores con capacidades, fallback y errores bien definidos",
+        "La UI y los mensajes al usuario reflejan claramente el motor activo y sus limitaciones",
+        "La documentacion del producto deja de prometer capacidades no implementadas",
+        "Añadir tests para la seleccion de motor y los casos de fallback principales"
+      ],
+      "dependencies": [],
+      "labels": ["feature", "core", "engine", "integrations", "ux"]
+    },
+    {
+      "id": "ISSUE-016",
+      "title": "Exponer estado failed con recuperacion y trazabilidad",
+      "description": "Hacer visible el estado failed de extremo a extremo para que los fallos del runner no se pierdan como tareas todo, incluyendo historial de reintentos, diagnostico y acciones de recuperacion desde la interfaz.",
+      "epic": "Runner",
+      "priority": "P1",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "El estado failed se persiste y se representa como estado de primer nivel en logs, panel e historial",
+        "Los fallos muestran motivo resumido, timestamp y numero de reintentos cuando exista esa informacion",
+        "La UI ofrece una accion clara para reintentar o resetear una tarea fallida sin ambiguedad",
+        "El runner no reinterpreta silenciosamente failed como todo durante la priorizacion",
+        "Añadir tests para transiciones de estado failed y recuperacion manual"
+      ],
+      "dependencies": [],
+      "labels": ["feature", "runner", "observability", "error-handling", "ux"]
+    },
+    {
+      "id": "ISSUE-017",
+      "title": "Crear harness de tests para extension y webview",
+      "description": "Montar una base minima de pruebas automatizadas para la extension y el webview que permita validar storage, mensajeria, estados y flujos criticos antes de seguir ampliando funcionalidad.",
+      "epic": "Core",
+      "priority": "P1",
+      "status": "todo",
+      "acceptanceCriteria": [
+        "Configurar scripts de test ejecutables desde package.json para la extension",
+        "Cubrir al menos flujos criticos de PRD manager, state manager y mensajeria del panel",
+        "Definir un gate minimo para que nuevas features incluyan pruebas o justificacion explicita",
+        "Dejar ejemplos base para tests de webview o integracion sin introducir dependencias innecesarias",
+        "Documentar de forma breve como ejecutar la suite dentro del repositorio"
+      ],
+      "dependencies": [],
+      "labels": ["feature", "core", "testing", "quality", "ci"]
     }
   ]
 }

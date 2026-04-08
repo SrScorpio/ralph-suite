@@ -396,7 +396,7 @@ function card(issue: Issue, log: TaskLog | null): string {
 	let actions = '';
 	if (issue.status === 'todo')        { actions = `<button class="btn btn-run" onclick="send('runTask','${issue.id}')">▶ Run</button>`; }
 	else if (issue.status === 'blocked'){ actions = `<button class="btn btn-disabled" disabled>⛓ Blocked</button>`; }
-	else if (issue.status === 'inprogress') { actions = `<button class="btn btn-done" onclick="send('markDone','${issue.id}')">✓ Mark done</button>`; }
+	else if (issue.status === 'inprogress') { actions = `<button class="btn btn-run" onclick="send('contextRefresh','${issue.id}')" title="Send context recovery prompt to chat">🔄 Refresh</button><button class="btn btn-done" onclick="send('markDone','${issue.id}')">✓ Mark done</button>`; }
 	else { actions = `<button class="btn btn-note" onclick="send('addNote','${issue.id}')" title="Add note">✎</button><button class="btn btn-reset" onclick="send('resetTask','${issue.id}')">↩ Reset</button>`; }
 
 	return `<div class="card" draggable="true" data-id="${issue.id}" data-status="${issue.status}"
