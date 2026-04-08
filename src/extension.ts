@@ -4,6 +4,7 @@ import * as path from 'path';
 import { KanbanPanel } from './kanbanPanel';
 import { RalphStateManager } from './stateManager';
 import { PrdManager } from './prdManager';
+import { loadAndInjectContext } from './contextInjector';
 
 export function activate(context: vscode.ExtensionContext) {
 	const output = vscode.window.createOutputChannel('Ralph Suite');
@@ -504,7 +505,15 @@ async function checkAutoOptimize(root: string, output: vscode.OutputChannel): Pr
 // ── Prompt builders ───────────────────────────────────────────────────────────
 
 function buildPrompt(task: any, prd: any, workspaceRoot: string): string {
-	const memory = loadMemory(workspaceRoot);
+	// ISSUE-002: Intelligent context injection (ADR-002)
+	const injection = loadAndInjectContext(
+		workspaceRoot,
+		task.description || '',
+		task.dependencies || [],
+		task.labels || [],
+		task.epic
+	);
+	const memory = injection ? injection.injected : loadMemory(workspaceRoot);
 	const cfg    = vscode.workspace.getConfiguration('ralph-suite');
 	const guardrails: string[] = cfg.get('guardrails', []);
 	const boundaries: string[] = cfg.get('boundaries', []);
