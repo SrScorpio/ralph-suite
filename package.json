@@ -2,7 +2,7 @@
   "name": "ralph-suite",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.6.8",
+  "version": "1.6.9",
   "publisher": "ralph-suite",
   "engines": {
     "vscode": "^1.90.0"
@@ -160,17 +160,17 @@
             "Never modify prd.json",
             "Never delete files without confirmation",
             "Always include tests for new features",
-            "Task states must be exactly: todo | inprogress | completed | blocked \u2014 never mix or invent states",
-            "When a task is finished, write the completion signal and wait for instructions \u2014 do not generate extra questions unless explicitly part of the task",
+            "Task states must be exactly: todo | inprogress | completed | blocked — never mix or invent states",
+            "When a task is finished, write the completion signal and wait for instructions — do not generate extra questions unless explicitly part of the task",
             "Always read .agent/memories.md before starting any task to load project context",
-            "Never commit secrets, API keys, tokens or passwords \u2014 use environment variables",
-            "Always validate and sanitize user inputs \u2014 never trust raw input",
-            "Run existing tests before marking a task as completed \u2014 do not break passing tests",
+            "Never commit secrets, API keys, tokens or passwords — use environment variables",
+            "Always validate and sanitize user inputs — never trust raw input",
+            "Run existing tests before marking a task as completed — do not break passing tests",
             "Security checkpoints required for: authentication changes, file deletions, DB schema changes, dependency upgrades",
-            "All new code must follow the conventions already present in the codebase \u2014 check existing patterns before creating new ones",
+            "All new code must follow the conventions already present in the codebase — check existing patterns before creating new ones",
             "Log important decisions and architectural choices in .agent/memories.md",
-            "Never use placeholders or TODO comments in production code \u2014 implement or leave existing code",
-            "If blocked, write a clear explanation in the note signal \u2014 do not silently timeout"
+            "Never use placeholders or TODO comments in production code — implement or leave existing code",
+            "If blocked, write a clear explanation in the note signal — do not silently timeout"
           ],
           "description": "%config.guardrails.description%"
         },
@@ -265,7 +265,7 @@
   },
   "devDependencies": {
     "@types/mocha": "^10.0.0",
-    "@types/node": "^20.0.0",
+    "@types/node": "^20.19.41",
     "@types/vscode": "^1.90.0",
     "@vscode/vsce": "^2.24.0",
     "mocha": "^10.0.0",
