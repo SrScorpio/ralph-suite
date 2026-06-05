@@ -1,7 +1,7 @@
 # Project Memories
 
 ## Project
-- Goal: Implementar las mejoras que comentare a continuacion 
+- Goal: VS Code extension for PRD-based task management with Kanban webview UI
 - Created: 2026-04-01
 
 ## Conventions
@@ -11,17 +11,9 @@
 
 ## Decisions
 - ADR-001: Use webview for UI (not native panels)
-- ADR-002: Section-based memory injection (ISSUE-002)
+- ADR-002: Section-based memory injection — Core+Conventions always injected, Decisions only when task depends on them, Task History never auto-injected
 
-## [2026-04-08] ISSUE-002: Task context injection inteligente
-- **Duration:** 13 min
-- **Note:** Implemented contextInjector.ts with section-based memory injection (ADR-002): Core+Conventions always injected, Decisions only when task depends on them, Task History never auto-injected. 28 tests passing. Updated buildPrompt in extension.ts and initMemories in stateManager.ts.
-## [2026-06-05] ISSUE-001: Context Refresh mid-task
-- **Duration:** 83505 min
-- **Note:** done
-## [2026-06-05] ISSUE-001: Context Refresh mid-task
-- **Duration:** 0 min
-- **Note:** done
-## [2026-06-05] ISSUE-013: ISSUE-013
-- **Duration:** 0 min
-- **Note:** Centralizado acceso raw al PRD con PrdManager, escritura atomica, soporte prdPath configurable y tests.
+## Completed Tasks
+- [2026-04-08] **ISSUE-002:** Implemented contextInjector.ts with section-based memory injection (ADR-002). Updated buildPrompt in extension.ts and initMemories in stateManager.ts. 28 tests.
+- [2026-06-05] **ISSUE-001:** Context Refresh mid-task.
+- [2026-06-05] **ISSUE-013:** Centralized raw PRD access via PrdManager with atomic writes, configurable prdPath, and tests.

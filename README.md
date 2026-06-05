@@ -281,4 +281,4 @@ If you have a Plan agent markdown file (from Copilot's `/plan` command):
 
 ## Version
 
-Current: **1.6.3** — see [CHANGELOG.md](CHANGELOG.md) for full history.
+Current: **1.7.0** — see [CHANGELOG.md](CHANGELOG.md) for full history.

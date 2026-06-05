@@ -4,6 +4,66 @@ All notable changes to Ralph Suite are documented here.
 
 ---
 
+## [1.7.0] - 2026-06-05
+
+### Added
+- **MIT License** (`LICENSE.md`) y metadatos del repositorio
+
+### Changed
+- **Modularización completa del código** — `extension.ts` dividido en módulos independientes:
+  - `src/activate.ts` — lógica de activación
+  - `src/kanbanPanel.ts` — panel Kanban y manejador de mensajes
+  - `src/prdManager.ts` — acceso al PRD con escritura atómica
+  - `src/stateManager.ts` — gestión de estado y señalización
+  - `src/promptBuilders.ts` — construcción de prompts para el chat
+  - `src/agentsMdBuilders.ts` — generación de AGENTS.md
+  - `src/commands/` — comandos separados: `memory.ts`, `menu.ts`, `project.ts`, `task.ts`
+  - `src/kanban/` — sub-módulos: `contextRefresh.ts`, `gitHubSync.ts`, `planImport.ts`
+- `src/extension.ts` reescrito como orquestador ligero
+- Actualizados planes de arquitectura, decisiones y seguridad
+
+### Fixed
+- Ignorados artefactos generados (VSIX, compiled) via `.gitignore` y `.vscodeignore`
+
+---
+
+## [1.6.9] - 2026-06-05
+
+### Changed
+- Actualizadas dependencias (`@types/node`)
+- Excluidos archivos del empaquetado VS Code (`.vscodeignore`)
+
+### Fixed
+- Ignorados artefactos compilados (VSIX) del repositorio
+
+---
+
+## [1.6.8] - 2026-06-05
+
+### Added
+- **PrdManager** — acceso centralizado raw al PRD con escritura atómica y `prdPath` configurable
+- **Perfiles de agente** — propiedades configurables: `agentRole`, `agentStack`, `agentProject`, `agentCheckpoints`
+- **Sanitización mejorada** de entradas de usuario en todas las rutas
+- Tests: `contextInjector.test.ts`, `contextRefresh.test.ts`, `sanitization.test.ts`, mocks de VS Code
+
+### Changed
+- **ISSUE-002: Context injection inteligente** — `contextInjector.ts` con inyección por secciones (ADR-002): Core+Conventions siempre inyectados, Decisions solo cuando la tarea depende de ellas, Task History nunca auto-inyectado
+- **ISSUE-001: Context Refresh mid-task** — refresco de contexto para tareas en progreso
+- Actualizados `tsconfig.json` (tipos estrictos) y `package.json`
+
+---
+
+## [1.6.5] - 2026-03-22
+
+### Added
+- **Traducciones al español** — `package.nls.es.json` para localización de la extensión
+- Mejorado manejo de estado en KanbanPanel
+
+### Changed
+- Actualizados AGENTS.md, `.github/copilot-instructions.md`, `plans/` y documentación del proyecto
+
+---
+
 ## [1.6.3] - 2026-03-20
 
 ### Fixed
