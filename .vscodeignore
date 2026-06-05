@@ -13,3 +13,4 @@ package-lock.json
 AGENTS.md
 **/.DS_Store
 **/*.map
+prd.json

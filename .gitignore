@@ -10,3 +10,7 @@ compiled/
 .ralph/
 src/.DS_Store
 .DS_Store
+.agent/
+memories.md
+prd.json
+
