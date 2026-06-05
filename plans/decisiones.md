@@ -1,6 +1,6 @@
 # Decisiones Arquitectónicas (ADR)
 
-Fecha: 1 de abril de 2026
+Fecha: 5 de junio de 2026
 
 ## ADR-001 — Elección de stack
 - Estado: accepted
@@ -37,11 +37,36 @@ Fecha: 1 de abril de 2026
 - Decisión: Representar dependencias con SVG en la vista Epic.
 
 ## ADR-007 — Prompt templates por tipo de tarea
-- Estado: proposed
+- Estado: accepted (base inicial)
 - Contexto: Diferentes tipos de tareas requieren instrucciones distintas.
-- Decisión: Mapear labels/epics a plantillas de prompt (feature, bugfix, refactor, test, deploy).
+- Decisión: Mapear señales de tarea (title, description, epic, labels) a `taskType` y resolver un perfil desde `ralph-suite.modelProfiles`. El prompt incluye engine, modelo recomendado y modo. La extensión no afirma poder fijar modelo si el proveedor no lo soporta.
+- Consecuencias: Mejor compatibilidad con Copilot/Codex sin acoplarse a una API de modelo inexistente. Queda pendiente UI dedicada para seleccionar perfil por tarea.
 
 ## ADR-008 — Resumen de sesión automático
 - Estado: proposed
 - Contexto: Cerrar sesiones manualmente es costoso.
 - Decisión: Al parar el runner, consolidar notas y generar entrada en `memories.md`.
+
+## ADR-009 — Separación backlog/runtime/memoria estable
+- Estado: accepted
+- Contexto: Mezclar tareas completadas en `.agent/memories.md` ensucia prompts y contradice ADR-002, que evita inyectar historial completo.
+- Decisión: `prd.json` representa backlog; `.ralph/` representa runtime/historial; `.agent/memories.md` representa memoria estable. `NOTA:` normal queda en log runtime. Sólo `DECISION:`, `MEMORIA:`, `BUG:` y `CONVENCION:` promocionan contenido a memoria estable.
+- Consecuencias: Prompts más pequeños y memoria más útil. Requiere que agentes usen prefijos explícitos si quieren persistir conocimiento reutilizable.
+
+## ADR-010 — Sanitización defensiva de webview y mensajes
+- Estado: accepted
+- Contexto: El webview renderiza HTML generado desde `prd.json`, logs, memoria y configuración. Sin escape de atributos/JS y sin validación de mensajes, un PRD manipulado puede ejecutar acciones en el extension host.
+- Decisión: Añadir helpers de escape para HTML, atributos y argumentos JS; escapar dependencias y campos dinámicos; validar mensajes entrantes con allowlist de IDs, status, priority, arrays y campos editables.
+- Consecuencias: Reduce riesgo XSS y abuso de `postMessage`. Deuda pendiente: CSP estricta, nonce y sustitución de handlers inline por listeners.
+
+## ADR-011 — IDs seguros para estado local
+- Estado: accepted
+- Contexto: Los IDs de tareas se usan en rutas `.ralph/task-<ID>-status`, `.ralph/task-<ID>-note` y `.ralph/task-<ID>-log.json`.
+- Decisión: Todos los IDs usados en rutas pasan por `safeTaskId`, limitado a caracteres seguros y longitud máxima.
+- Consecuencias: Evita traversal y nombres de fichero peligrosos. Los IDs del PRD también se normalizan al cargar para evitar duplicados y entradas inválidas.
+
+## ADR-012 — Tests Node con mock de VS Code
+- Estado: accepted
+- Contexto: Los tests unitarios importan módulos que dependen de `vscode`, pero Mocha corre fuera del extension host.
+- Decisión: Añadir `src/test/vscodeMock.js` y cargarlo con `--require` en `npm test`.
+- Consecuencias: Los tests de builders, sanitización y lógica local pueden ejecutarse en Node sin `vscode-test`. Los tests de integración real de VS Code siguen pendientes.
