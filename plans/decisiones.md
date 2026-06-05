@@ -76,3 +76,21 @@ Fecha: 5 de junio de 2026
 - Contexto: `kanbanPanel.ts` tenía lecturas/escrituras directas de `prd.json` en reorder, edit, add e import. Eso duplicaba lógica, dificultaba validar y aumentaba riesgo de corrupción del backlog.
 - Decisión: Centralizar el acceso raw en `PrdManager`: `loadRaw`, `saveRaw`, `mutateRaw`, `rawItems` y `setRawItems`. Las escrituras usan archivo temporal y `rename` final.
 - Consecuencias: Menos escrituras dispersas y base para validación/backup/configuración futura. Queda pendiente hacer que todos los comandos respeten `ralph-suite.prdPath` si se permite una ruta distinta a `prd.json`.
+
+## ADR-014 — Modularización post-refactor y cleanup
+- Estado: accepted
+- Contexto: Tras varias iteraciones, `extension.ts` (822 lines) y `kanbanPanel.ts` (1 020 lines) superan el umbral de gestión cómoda. Además existen problemas menores arrastrados: `output.show()` en activación roba el foco, parámetro fantasma en `setupProject`, CSS duplicado en `kanbanHtml.ts`, y promesas sin manejar en `KanbanPanel.sendMessage()`.
+- Decisión: Reestructurar en módulos cohesivos por responsabilidad:
+  - `src/extension.ts` → solo `activate`/`deactivate` (boleilerplate VS Code).
+  - `src/activate.ts` → `_doActivate`: registro de comandos y watchers.
+  - `src/commands/menu.ts` → `showMenu` (quick pick).
+  - `src/commands/project.ts` → `initProject`, `setupProject`.
+  - `src/commands/task.ts` → `runTaskWithRetry`, `sleep`.
+  - `src/commands/memory.ts` → `optimizeMemory`.
+  - `src/promptBuilders.ts` → `buildPrompt`, `buildInitPrompt`, `inferTaskType`, `resolveAgentProfile`.
+  - `src/agentsMdBuilders.ts` → `buildAgentsMd`, `buildCopilotInstructions`, `buildArquitecturaMd`, `buildSeguridadMd`, `buildDecisionesMd`.
+  - `src/kanban/contextRefresh.ts` → `buildContextRefreshPrompt`.
+  - `src/kanban/gitHubSync.ts` → `buildPushPrompt`, `buildSyncPrompt`.
+  - `src/kanban/planImport.ts` → `importPlanToPrd`, `generateNextId`, `buildAddFromChatPrompt`.
+  - `src/stateManager.ts`, `src/prdManager.ts`, `src/contextInjector.ts` y `src/webview/kanbanHtml.ts` no se modifican.
+- Consecuencias: Mayor mantenibilidad, ficheros con responsabilidad única (~50-150 líneas cada uno), y menos acoplamiento. Los tests existentes requieren solo ajuste de imports. El cleanup elimina 4 bugs/olores menores sin cambio funcional.

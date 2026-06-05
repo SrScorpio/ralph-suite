@@ -14,7 +14,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { buildContextRefreshPrompt } from '../kanbanPanel';
+import { buildContextRefreshPrompt } from '../kanban/contextRefresh';
 import { Issue, Prd } from '../prdManager';
 
 // ── Test fixtures ────────────────────────────────────────────────────────────

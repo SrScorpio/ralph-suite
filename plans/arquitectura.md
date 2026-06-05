@@ -7,10 +7,21 @@ Resumen
 Ralph Suite es una extensión de VS Code (TypeScript/Node.js) que provee un tablero Kanban y un runtime local para tareas agenticas. El almacenamiento principal de backlog es `prd.json` en la raíz. El estado de ejecución vive en `.ralph/`. La memoria estable vive en `.agent/memories.md`. El agente corre desde prompts generados por la extensión y la UI está en un `webview` ligero.
 
 Componentes principales
-- `extension.ts` — punto de entrada y comandos de VS Code.
-- `kanbanPanel.ts` — lógica del webview y comunicación con el extension host.
+- `extension.ts` — punto de entrada mínimo (~25 lines). Solo `activate`/`deactivate` y try/catch. La lógica reside en `activate.ts`.
+- `activate.ts` — registro de comandos y watchers de VS Code.
+- `commands/menu.ts` — comando `showMenu` (quick pick).
+- `commands/project.ts` — `initProject`, `setupProject`.
+- `commands/task.ts` — `runTaskWithRetry`, `sleep`.
+- `commands/memory.ts` — `optimizeMemory`.
+- `promptBuilders.ts` — constructores de prompts (`buildPrompt`, `buildInitPrompt`, `inferTaskType`, `resolveAgentProfile`).
+- `agentsMdBuilders.ts` — constructores de AGENTS.md y plan files.
+- `kanbanPanel.ts` — clase KanbanPanel: ciclo de vida del webview, runner y message handler.
+- `kanban/contextRefresh.ts` — constructor del prompt de Context Refresh mid-task (ISSUE-001).
+- `kanban/gitHubSync.ts` — constructores de prompts para push/sync de GitHub Issues.
+- `kanban/planImport.ts` — parser de markdown (plan agent → prd.json), generador de IDs y prompt de Add from Chat.
 - `prdManager.ts` — acceso centralizado al PRD: lectura raw, normalización defensiva, mutación de items y escritura atómica con archivo temporal + rename.
 - `stateManager.ts` — manejo de estados locales, rutas seguras, `.ralph/` logs y promoción controlada de memoria estable.
+- `contextInjector.ts` — inyección de memoria por secciones (ADR-002).
 - `webview/kanbanHtml.ts` — HTML/JS del tablero (sin framework por defecto), con escape explícito para HTML, atributos y argumentos JS.
 - `.agent/memories.md` — memoria estable del proyecto, separada del historial runtime. Secciones principales: Project, Conventions, Decisions, Known Issues.
 - `.ralph/task-<ID>-log.json` — historial runtime por tarea. No debe mezclarse con memoria estable salvo promoción explícita.
@@ -34,7 +45,6 @@ Configuraciones relevantes
 - `ralph-suite.engine` (`copilot`, `codex`, `claude`, `opencode`)
 - `ralph-suite.modelProfiles` (perfiles recomendados por tipo: default, bugfix, review, security)
 - `ralph-suite.gitCheckpoint` (boolean)
-- `ralph-suite.splitSuggestAfterMs` (número, 0 desactivado)
 
 Pruebas y CI
 - `npm run compile` compila TypeScript.

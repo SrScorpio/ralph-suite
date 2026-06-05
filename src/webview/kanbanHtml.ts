@@ -64,11 +64,6 @@ code{background:var(--bg3);padding:1px 5px;border-radius:3px;font-family:var(--m
 .btn-add{background:rgba(63,185,80,.1);border-color:rgba(63,185,80,.35);color:var(--green)}
 .btn-setup{background:rgba(227,179,65,.08);border-color:rgba(227,179,65,.3);color:var(--amber)}
 .btn-setup:hover{background:rgba(227,179,65,.18)!important}
-.btn-optimize{background:rgba(139,148,158,.08);border-color:rgba(139,148,158,.25);color:var(--text2)}
-.btn-optimize:hover{background:rgba(139,148,158,.18)!important;color:var(--text)!important}
-.btn-setup:hover{background:rgba(227,179,65,.18)!important}
-.btn-optimize{background:rgba(139,148,158,.08);border-color:rgba(139,148,158,.3);color:var(--text2)}
-.btn-optimize:hover{background:rgba(139,148,158,.18)!important;color:var(--text)!important}
 .btn-optimize{background:rgba(188,140,255,.08);border-color:rgba(188,140,255,.3);color:#bc8cff}
 .btn-optimize:hover{background:rgba(188,140,255,.18)!important}
 .btn-runner-on{background:rgba(248,81,73,.12);border-color:rgba(248,81,73,.4);color:var(--red)}
@@ -350,17 +345,6 @@ export function getBoardContent(
 	if (cfg.view === 'history') { return bar + historyView(logs); }
 	if (cfg.view === 'epic')    { return bar + epicView(prd, logs); }
 	return bar + boardView(prd, logs, cfg.autoRun) + guardrailsPanel(cfg.guardrails, cfg.boundaries) + (memories ? memoriesPanel(memories) : '');
-}
-
-// ── Keep getKanbanHtml as alias for compatibility ─────────────────────────────
-export function getKanbanHtml(
-	prd: Prd | null,
-	memories: string | null,
-	logs: Record<string, TaskLog> = {},
-	cfg: BoardConfig = { autoRun: false, maxLoops: 5, guardrails: [], boundaries: [], view: 'board' }
-): string {
-	// This is now only used for the initial shell load
-	return getShellHtml();
 }
 
 
