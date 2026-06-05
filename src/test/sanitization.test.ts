@@ -67,6 +67,51 @@ describe('PRD normalization', () => {
 		assert.deepStrictEqual(prd!.issues[0].labels, []);
 		assert.deepStrictEqual(prd!.issues[0].dependencies, ['DEP_1']);
 	});
+
+	it('mutates and saves PRD through the central raw API', () => {
+		fs.writeFileSync(path.join(tmpDir, 'prd.json'), JSON.stringify({
+			project: 'x',
+			issues: [{ id: 'ISSUE-001', title: 'One' }],
+		}), 'utf-8');
+
+		const changed = PrdManager.mutateRaw(tmpDir, (_raw, items) => {
+			items.push({ id: 'ISSUE-002', title: 'Two' });
+		});
+
+		assert.strictEqual(changed, true);
+		const raw = PrdManager.loadRaw(tmpDir);
+		assert.strictEqual(raw.issues.length, 2);
+		assert.strictEqual(raw.issues[1].id, 'ISSUE-002');
+	});
+
+	it('returns false and does not save when mutator cancels', () => {
+		fs.writeFileSync(path.join(tmpDir, 'prd.json'), JSON.stringify({
+			project: 'x',
+			issues: [{ id: 'ISSUE-001', title: 'One' }],
+		}), 'utf-8');
+
+		const changed = PrdManager.mutateRaw(tmpDir, (_raw, items) => {
+			items.push({ id: 'ISSUE-002', title: 'Two' });
+			return false;
+		});
+
+		assert.strictEqual(changed, false);
+		const raw = PrdManager.loadRaw(tmpDir);
+		assert.strictEqual(raw.issues.length, 1);
+	});
+
+	it('supports configured PRD paths inside the workspace and rejects traversal outside it', () => {
+		const customDir = path.join(tmpDir, 'data');
+		fs.mkdirSync(customDir, { recursive: true });
+		PrdManager.saveRaw(tmpDir, {
+			project: 'custom',
+			issues: [{ id: 'ISSUE-001', title: 'One' }],
+		}, 'data/custom-prd.json');
+
+		assert.ok(fs.existsSync(path.join(customDir, 'custom-prd.json')));
+		assert.strictEqual(PrdManager.load(tmpDir, 'data/custom-prd.json')!.project, 'custom');
+		assert.strictEqual(PrdManager.prdPath(tmpDir, '../outside.json'), path.join(tmpDir, 'prd.json'));
+	});
 });
 
 describe('stable memory promotion', () => {

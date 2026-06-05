@@ -70,3 +70,9 @@ Fecha: 5 de junio de 2026
 - Contexto: Los tests unitarios importan módulos que dependen de `vscode`, pero Mocha corre fuera del extension host.
 - Decisión: Añadir `src/test/vscodeMock.js` y cargarlo con `--require` en `npm test`.
 - Consecuencias: Los tests de builders, sanitización y lógica local pueden ejecutarse en Node sin `vscode-test`. Los tests de integración real de VS Code siguen pendientes.
+
+## ADR-013 — Acceso centralizado al PRD
+- Estado: accepted
+- Contexto: `kanbanPanel.ts` tenía lecturas/escrituras directas de `prd.json` en reorder, edit, add e import. Eso duplicaba lógica, dificultaba validar y aumentaba riesgo de corrupción del backlog.
+- Decisión: Centralizar el acceso raw en `PrdManager`: `loadRaw`, `saveRaw`, `mutateRaw`, `rawItems` y `setRawItems`. Las escrituras usan archivo temporal y `rename` final.
+- Consecuencias: Menos escrituras dispersas y base para validación/backup/configuración futura. Queda pendiente hacer que todos los comandos respeten `ralph-suite.prdPath` si se permite una ruta distinta a `prd.json`.

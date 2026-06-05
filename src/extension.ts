@@ -38,7 +38,7 @@ function _doActivate(context: vscode.ExtensionContext, output: vscode.OutputChan
 		vscode.commands.registerCommand('ralph-suite.showMenu', async () => {
 			output.appendLine('[Ralph] showMenu triggered');
 			const root = getWorkspaceRoot();
-			const prd  = root ? PrdManager.load(root) : null;
+			const prd  = root ? PrdManager.load(root, getPrdPathSetting()) : null;
 			const done  = prd ? prd.issues.filter(i => i.status === 'completed').length : 0;
 			const total = prd ? prd.issues.length : 0;
 			const pct   = total ? Math.round((done / total) * 100) : 0;
@@ -132,7 +132,7 @@ function _doActivate(context: vscode.ExtensionContext, output: vscode.OutputChan
 			output.appendLine(`[Ralph] runTask triggered: ${taskId ?? 'auto'}`);
 			const root = getWorkspaceRoot();
 			if (!root) { return; }
-			const prd = PrdManager.load(root);
+			const prd = PrdManager.load(root, getPrdPathSetting());
 			if (!prd) { vscode.window.showErrorMessage('No prd.json found.'); return; }
 			const task = taskId
 				? prd.issues.find(i => i.id === taskId)
@@ -165,8 +165,9 @@ function _doActivate(context: vscode.ExtensionContext, output: vscode.OutputChan
 	// File watchers
 	const workspaceRoot = getWorkspaceRoot();
 	if (workspaceRoot) {
+		const prdPattern = path.relative(workspaceRoot, PrdManager.prdPath(workspaceRoot, getPrdPathSetting())) || 'prd.json';
 		const prdWatcher = vscode.workspace.createFileSystemWatcher(
-			new vscode.RelativePattern(workspaceRoot, 'prd.json')
+			new vscode.RelativePattern(workspaceRoot, prdPattern)
 		);
 		prdWatcher.onDidChange(() => { output.appendLine('[Ralph] prd.json changed'); KanbanPanel.refresh(); });
 		prdWatcher.onDidCreate(() => { output.appendLine('[Ralph] prd.json created'); KanbanPanel.refresh(); });
@@ -185,8 +186,12 @@ function getWorkspaceRoot(): string | undefined {
 	return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 }
 
+function getPrdPathSetting(): string {
+	return vscode.workspace.getConfiguration('ralph-suite').get<string>('prdPath', 'prd.json');
+}
+
 async function initProject(root: string, output: vscode.OutputChannel) {
-	const prdPath  = path.join(root, 'prd.json');
+	const prdPath  = PrdManager.prdPath(root, getPrdPathSetting());
 	const ralphDir = path.join(root, '.ralph');
 
 	if (fs.existsSync(prdPath)) {
@@ -250,7 +255,7 @@ async function initProject(root: string, output: vscode.OutputChannel) {
 	vscode.window.showInformationMessage('Chat opened. When prd.json is created, open the board.');
 
 	// Poll for prd.json
-	const prdPath2 = path.join(root, 'prd.json');
+	const prdPath2 = PrdManager.prdPath(root, getPrdPathSetting());
 	let polls = 0;
 	const timer = setInterval(() => {
 		polls++;

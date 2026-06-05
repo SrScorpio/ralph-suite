@@ -50,6 +50,7 @@ Logging y datos sensibles
 
 Validación de datos
 - `prdManager.ts` normaliza defensivamente `prd.json`: strings, arrays, IDs, duplicados, prioridad y estado.
+- Las escrituras de `prd.json` deben pasar por `PrdManager.saveRaw` o `PrdManager.mutateRaw`, con escritura a fichero temporal y `rename` final.
 - IDs inválidos se convierten a nombres seguros; IDs duplicados se desambiguan.
 - Las dependencias se normalizan como IDs seguros. Una dependencia inexistente bloquea la tarea hasta completarse o corregirse.
 - Los campos de edición desde webview se limitan por allowlist y longitud máxima.

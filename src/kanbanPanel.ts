@@ -116,7 +116,7 @@ export class KanbanPanel {
 	private render() {
 		if (this.disposed) { return; }
 		try {
-			const prd      = PrdManager.load(this.root);
+			const prd      = PrdManager.load(this.root, this.prdPathSetting());
 			const memories = this.loadFile(path.join(this.root, '.agent', 'memories.md'));
 			const logs     = this.loadLogs();
 			const cfg      = this.getBoardConfig();
@@ -176,6 +176,10 @@ export class KanbanPanel {
 		return map;
 	}
 
+	private prdPathSetting(): string {
+		return vscode.workspace.getConfiguration('ralph-suite').get<string>('prdPath', 'prd.json');
+	}
+
 	// ── Runner ────────────────────────────────────────────────────────────────
 
 	private async checkAutoOptimize(): Promise<void> {
@@ -184,7 +188,7 @@ export class KanbanPanel {
 		if (optimizeEvery <= 0) { return; }
 
 		// Count completed tasks
-		const prd = PrdManager.load(this.root);
+		const prd = PrdManager.load(this.root, this.prdPathSetting());
 		if (!prd) { return; }
 		const statuses   = RalphStateManager.getAllStatuses(this.root);
 		const totalDone  = prd.issues.filter(i => (statuses[i.id] ?? 'todo') === 'completed').length;
@@ -232,7 +236,7 @@ export class KanbanPanel {
 			this.stopRunner();
 			return;
 		}
-		const prd = PrdManager.load(this.root);
+		const prd = PrdManager.load(this.root, this.prdPathSetting());
 		if (!prd) { this.stopRunner(); return; }
 
 		const statuses = RalphStateManager.getAllStatuses(this.root);
@@ -294,7 +298,7 @@ export class KanbanPanel {
 					});
 					RalphStateManager.setCompleted(this.root, id, summary ?? undefined);
 				} else if (status === 'inprogress') {
-					const prdIP = PrdManager.load(this.root);
+					const prdIP = PrdManager.load(this.root, this.prdPathSetting());
 					const titleIP = prdIP?.issues.find(i => i.id === id)?.title ?? '';
 					RalphStateManager.setInProgress(this.root, id, titleIP);
 				} else if (status === 'todo') {
@@ -309,22 +313,18 @@ export class KanbanPanel {
 				const targetId = safeMessageId(msg.targetId);
 				const before = msg.before === true;
 				if (!id || !targetId) { break; }
-				const prdPathR = path.join(this.root, 'prd.json');
-				if (!fs.existsSync(prdPathR)) { break; }
 				try {
-					const raw   = JSON.parse(fs.readFileSync(prdPathR, 'utf-8'));
-					const items: any[] = raw.issues ?? raw.userStories ?? [];
-					const fromIdx = items.findIndex((i: any) => i.id === id);
-					const toIdx   = items.findIndex((i: any) => i.id === targetId);
-					if (fromIdx === -1 || toIdx === -1) { break; }
-					const [moved] = items.splice(fromIdx, 1);
-					const insertAt = before
-						? (fromIdx < toIdx ? toIdx - 1 : toIdx)
-						: (fromIdx < toIdx ? toIdx : toIdx + 1);
-					items.splice(Math.max(0, insertAt), 0, moved);
-					if (raw.issues)            { raw.issues = items; }
-					else if (raw.userStories)  { raw.userStories = items; }
-					fs.writeFileSync(prdPathR, JSON.stringify(raw, null, 2), 'utf-8');
+					const changed = PrdManager.mutateRaw(this.root, (_raw, items) => {
+						const fromIdx = items.findIndex((i: any) => i.id === id);
+						const toIdx   = items.findIndex((i: any) => i.id === targetId);
+						if (fromIdx === -1 || toIdx === -1) { return false; }
+						const [moved] = items.splice(fromIdx, 1);
+						const insertAt = before
+							? (fromIdx < toIdx ? toIdx - 1 : toIdx)
+							: (fromIdx < toIdx ? toIdx : toIdx + 1);
+							items.splice(Math.max(0, insertAt), 0, moved);
+						}, this.prdPathSetting());
+					if (!changed) { break; }
 					this.render();
 				} catch (e) {
 					KanbanPanel.output?.appendLine(`[Board] Reorder failed: ${e}`);
@@ -367,7 +367,7 @@ export class KanbanPanel {
 				break;
 
 			case 'pushToGitHub': {
-				const prd = PrdManager.load(this.root);
+				const prd = PrdManager.load(this.root, this.prdPathSetting());
 				if (!prd) { vscode.window.showErrorMessage('No prd.json found.'); break; }
 				const statuses = RalphStateManager.getAllStatuses(this.root);
 				const pending = prd.issues.filter(i => {
@@ -392,7 +392,7 @@ export class KanbanPanel {
 			}
 
 			case 'syncFromGitHub': {
-				const prd2 = PrdManager.load(this.root);
+				const prd2 = PrdManager.load(this.root, this.prdPathSetting());
 				if (!prd2) { vscode.window.showErrorMessage('No prd.json found.'); break; }
 				const prompt2 = buildSyncPrompt(prd2, this.root);
 				try {
@@ -423,7 +423,7 @@ export class KanbanPanel {
 				// Send full issue data to webview for the edit modal
 				const id = safeMessageId(msg.id);
 				if (!id) { break; }
-				const prdE = PrdManager.load(this.root);
+				const prdE = PrdManager.load(this.root, this.prdPathSetting());
 				const issue = prdE?.issues.find(i => i.id === id);
 				if (issue) {
 					this.panel.webview.postMessage({ type: 'openEditModal', issue });
@@ -437,18 +437,14 @@ export class KanbanPanel {
 				const fields = cleanIssueFields(msg.fields);
 				if (!id || !fields) { break; }
 				if (!fields.title) { break; }
-				const prdPathE = path.join(this.root, 'prd.json');
-				if (!fs.existsSync(prdPathE)) { break; }
 				try {
-					const raw   = JSON.parse(fs.readFileSync(prdPathE, 'utf-8'));
-					const items = raw.issues ?? raw.userStories ?? [];
-					const idx   = items.findIndex((i: any) => i.id === id);
-					if (idx === -1) { break; }
-					// Merge allowlisted fields only.
-					items[idx] = { ...items[idx], ...fields };
-					if (raw.issues)      { raw.issues = items; }
-					else if (raw.userStories) { raw.userStories = items; }
-					fs.writeFileSync(prdPathE, JSON.stringify(raw, null, 2), 'utf-8');
+					const changed = PrdManager.mutateRaw(this.root, (_raw, items) => {
+						const idx = items.findIndex((i: any) => i.id === id);
+						if (idx === -1) { return false; }
+						// Merge allowlisted fields only.
+						items[idx] = { ...items[idx], ...fields };
+					}, this.prdPathSetting());
+					if (!changed) { break; }
 					this.render();
 					KanbanPanel.output?.appendLine(`[Board] Edited issue ${id}`);
 				} catch (e) {
@@ -458,45 +454,41 @@ export class KanbanPanel {
 			}
 
 			case 'addIssue': {
-				const prd = PrdManager.load(this.root);
+				const prd = PrdManager.load(this.root, this.prdPathSetting());
 				if (!prd) { vscode.window.showErrorMessage('No prd.json found.'); break; }
 				const fields = cleanIssueFields(msg.issue);
 				if (!fields.title) { break; }
 
-				const prdPath = path.join(this.root, 'prd.json');
-				const raw     = JSON.parse(fs.readFileSync(prdPath, 'utf-8'));
-				const items   = raw.issues ?? raw.userStories ?? [];
-
-				// Generate next ID based on existing format
-				const existingIds: string[] = items.map((i: any) => i.id ?? '');
-				const newId = generateNextId(existingIds);
-
-				const newIssue = {
-					id:                 newId,
-					title:              fields.title,
-					description:        fields.description ?? '',
-					epic:               fields.epic,
-					priority:           fields.priority ?? 'P2',
-					status:             'todo',
-					acceptanceCriteria: fields.acceptanceCriteria ?? [],
-					dependencies:       [],
-					labels:             fields.labels ?? [],
-				};
-
-				items.push(newIssue);
-				if (raw.issues)      { raw.issues = items; }
-				else if (raw.userStories) { raw.userStories = items; }
-				else                 { raw.issues = items; }
-
-				fs.writeFileSync(prdPath, JSON.stringify(raw, null, 2), 'utf-8');
-				KanbanPanel.output?.appendLine(`[Board] Added issue ${newId}: ${newIssue.title}`);
-				this.render();
+				let newId = '';
+				try {
+					const changed = PrdManager.mutateRaw(this.root, (_raw, items) => {
+						// Generate next ID based on existing format
+						const existingIds: string[] = items.map((i: any) => i.id ?? '');
+						newId = generateNextId(existingIds);
+						items.push({
+							id:                 newId,
+							title:              fields.title,
+							description:        fields.description ?? '',
+							epic:               fields.epic,
+							priority:           fields.priority ?? 'P2',
+							status:             'todo',
+							acceptanceCriteria: fields.acceptanceCriteria ?? [],
+							dependencies:       [],
+								labels:             fields.labels ?? [],
+							});
+						}, this.prdPathSetting());
+					if (!changed) { break; }
+					KanbanPanel.output?.appendLine(`[Board] Added issue ${newId}: ${fields.title}`);
+					this.render();
+				} catch (e) {
+					KanbanPanel.output?.appendLine(`[Board] Add issue failed: ${e}`);
+				}
 				break;
 			}
 
 			case 'addFromChat': {
-				const prd2    = PrdManager.load(this.root);
-				const prdPath2 = path.join(this.root, 'prd.json');
+				const prd2    = PrdManager.load(this.root, this.prdPathSetting());
+				const prdPath2 = PrdManager.prdPath(this.root, this.prdPathSetting());
 				const prompt  = buildAddFromChatPrompt(prd2, prdPath2);
 				try {
 					await vscode.commands.executeCommand('workbench.action.chat.open', {
@@ -523,7 +515,7 @@ export class KanbanPanel {
 				if (!planText) { break; }
 				const imported = importPlanToPrd(planText);
 				if (!imported || !imported.issues.length) { vscode.window.showErrorMessage('Could not parse tasks from the plan.'); break; }
-				const prdPathI = path.join(this.root, 'prd.json');
+				const prdPathI = PrdManager.prdPath(this.root, this.prdPathSetting());
 
 				// Warn about leftover .ralph/ state if this is a fresh import (no prd.json)
 				if (!fs.existsSync(prdPathI)) {
@@ -552,24 +544,24 @@ export class KanbanPanel {
 					);
 					if (!action || action === 'Cancel') { break; }
 					if (action === 'Append') {
-						const existing = JSON.parse(fs.readFileSync(prdPathI, 'utf-8'));
-						const existingItems: any[] = existing.issues ?? existing.userStories ?? [];
-						const existingIds = new Set(existingItems.map((i: any) => String(i.id)));
-						const reIDed = imported.issues.map(i => {
-							if (!existingIds.has(i.id)) { existingIds.add(i.id); return i; }
-							const nid = generateNextId([...existingIds]);
-							existingIds.add(nid);
-							return { ...i, id: nid };
-						});
-						existingItems.push(...reIDed);
-						if (existing.issues) { existing.issues = existingItems; } else { existing.userStories = existingItems; }
-						fs.writeFileSync(prdPathI, JSON.stringify(existing, null, 2), 'utf-8');
-						vscode.window.showInformationMessage(`Appended ${reIDed.length} issues to prd.json`);
-						KanbanPanel.output?.appendLine(`[Import] Appended ${reIDed.length} issues`);
+						let appended = 0;
+						PrdManager.mutateRaw(this.root, (_raw, existingItems) => {
+							const existingIds = new Set(existingItems.map((i: any) => String(i.id)));
+							const reIDed = imported.issues.map(i => {
+								if (!existingIds.has(i.id)) { existingIds.add(i.id); return i; }
+								const nid = generateNextId([...existingIds]);
+								existingIds.add(nid);
+								return { ...i, id: nid };
+							});
+							existingItems.push(...reIDed);
+							appended = reIDed.length;
+						}, this.prdPathSetting());
+						vscode.window.showInformationMessage(`Appended ${appended} issues to prd.json`);
+						KanbanPanel.output?.appendLine(`[Import] Appended ${appended} issues`);
 						this.render(); break;
 					}
 				}
-				fs.writeFileSync(prdPathI, JSON.stringify(imported, null, 2), 'utf-8');
+				PrdManager.saveRaw(this.root, imported, this.prdPathSetting());
 				vscode.window.showInformationMessage(`Created prd.json with ${imported.issues.length} issues`);
 				KanbanPanel.output?.appendLine(`[Import] Overwrote prd.json with ${imported.issues.length} issues`);
 				this.render();
@@ -596,7 +588,7 @@ export class KanbanPanel {
 			}
 
 			case 'openPrd': {
-				const p = path.join(this.root, 'prd.json');
+				const p = PrdManager.prdPath(this.root, this.prdPathSetting());
 				if (fs.existsSync(p)) {
 					const doc = await vscode.workspace.openTextDocument(p);
 					await vscode.window.showTextDocument(doc);
@@ -622,15 +614,15 @@ export class KanbanPanel {
 				const taskId = safeMessageId(msg.id);
 				if (!taskId) { break; }
 				KanbanPanel.output?.appendLine(`[Board] Context refresh requested for ${taskId}`);
-				const prdCR = PrdManager.load(this.root);
+				const prdCR = PrdManager.load(this.root, this.prdPathSetting());
 				if (!prdCR) { vscode.window.showErrorMessage('No prd.json found.'); break; }
 				const taskCR = prdCR.issues.find(i => i.id === taskId);
 				if (!taskCR) { vscode.window.showErrorMessage(`Task ${taskId} not found.`); break; }
 				const prompt = buildContextRefreshPrompt(this.root, taskCR, prdCR);
 				try {
-					await vscode.commands.executeCommand('workbench.action.chat.open', {
-						query: prompt, isPartialQuery: false
-					});
+						await vscode.commands.executeCommand('workbench.action.chat.open', {
+							query: prompt, isPartialQuery: false
+						});
 				} catch {
 					await vscode.env.clipboard.writeText(prompt);
 					vscode.window.showInformationMessage('Context refresh prompt copied — paste in Copilot Chat.');
@@ -863,8 +855,8 @@ function importPlanToPrd(markdown: string): ImportedPrd | null {
 					status:             'todo',
 					acceptanceCriteria: [],
 					dependencies:       n > 1 ? [`TASK-${String(n - 1).padStart(3, '0')}`] : [],
-					labels:             [],
-				});
+						labels:             [],
+					});
 			}
 		}
 	}

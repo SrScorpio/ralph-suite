@@ -16,3 +16,12 @@
 ## [2026-04-08] ISSUE-002: Task context injection inteligente
 - **Duration:** 13 min
 - **Note:** Implemented contextInjector.ts with section-based memory injection (ADR-002): Core+Conventions always injected, Decisions only when task depends on them, Task History never auto-injected. 28 tests passing. Updated buildPrompt in extension.ts and initMemories in stateManager.ts.
+## [2026-06-05] ISSUE-001: Context Refresh mid-task
+- **Duration:** 83505 min
+- **Note:** done
+## [2026-06-05] ISSUE-001: Context Refresh mid-task
+- **Duration:** 0 min
+- **Note:** done
+## [2026-06-05] ISSUE-013: ISSUE-013
+- **Duration:** 0 min
+- **Note:** Centralizado acceso raw al PRD con PrdManager, escritura atomica, soporte prdPath configurable y tests.

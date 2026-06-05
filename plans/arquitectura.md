@@ -9,7 +9,7 @@ Ralph Suite es una extensión de VS Code (TypeScript/Node.js) que provee un tabl
 Componentes principales
 - `extension.ts` — punto de entrada y comandos de VS Code.
 - `kanbanPanel.ts` — lógica del webview y comunicación con el extension host.
-- `prdManager.ts` — lectura y normalización defensiva de `prd.json`: tipos, IDs, prioridades, estados, arrays y duplicados.
+- `prdManager.ts` — acceso centralizado al PRD: lectura raw, normalización defensiva, mutación de items y escritura atómica con archivo temporal + rename.
 - `stateManager.ts` — manejo de estados locales, rutas seguras, `.ralph/` logs y promoción controlada de memoria estable.
 - `webview/kanbanHtml.ts` — HTML/JS del tablero (sin framework por defecto), con escape explícito para HTML, atributos y argumentos JS.
 - `.agent/memories.md` — memoria estable del proyecto, separada del historial runtime. Secciones principales: Project, Conventions, Decisions, Known Issues.

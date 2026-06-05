@@ -105,11 +105,67 @@ function normalizeItem(raw: RawItem, index: number, usedIds: Set<string>): Issue
 }
 
 export class PrdManager {
-	static load(root: string): Prd | null {
-		const prdPath = path.join(root, 'prd.json');
-		if (!fs.existsSync(prdPath)) return null;
+	static prdPath(root: string, configuredPath = 'prd.json'): string {
+		const rootPath = path.resolve(root);
+		const target = path.isAbsolute(configuredPath)
+			? configuredPath
+			: path.join(rootPath, configuredPath || 'prd.json');
+		const resolved = path.resolve(target);
+		if (resolved !== rootPath && !resolved.startsWith(rootPath + path.sep)) {
+			return path.join(rootPath, 'prd.json');
+		}
+		return resolved;
+	}
+
+	static rawItems(raw: any): any[] {
+		if (Array.isArray(raw?.issues)) { return raw.issues; }
+		if (Array.isArray(raw?.userStories)) { return raw.userStories; }
+		raw.issues = [];
+		return raw.issues;
+	}
+
+	static setRawItems(raw: any, items: any[]): void {
+		if (Array.isArray(raw?.issues)) { raw.issues = items; return; }
+		if (Array.isArray(raw?.userStories)) { raw.userStories = items; return; }
+		raw.issues = items;
+	}
+
+	static loadRaw(root: string, configuredPath = 'prd.json'): any | null {
+		const prdPath = this.prdPath(root, configuredPath);
+		if (!fs.existsSync(prdPath)) { return null; }
 		try {
-			const raw = JSON.parse(fs.readFileSync(prdPath, 'utf-8')) as RawPrd;
+			return JSON.parse(fs.readFileSync(prdPath, 'utf-8'));
+		} catch (e) {
+			console.error('[Ralph] Failed to parse prd.json:', e);
+			return null;
+		}
+	}
+
+	static saveRaw(root: string, raw: any, configuredPath = 'prd.json'): void {
+		const prdPath = this.prdPath(root, configuredPath);
+		const dir = path.dirname(prdPath);
+		const tmpPath = path.join(dir, `.prd.json.${process.pid}.${Date.now()}.tmp`);
+		fs.writeFileSync(tmpPath, JSON.stringify(raw, null, 2), 'utf-8');
+		fs.renameSync(tmpPath, prdPath);
+	}
+
+	static mutateRaw(root: string, mutate: (raw: any, items: any[]) => boolean | void, configuredPath = 'prd.json'): boolean {
+		const raw = this.loadRaw(root, configuredPath);
+		if (!raw) { return false; }
+		const items = this.rawItems(raw);
+		const changed = mutate(raw, items);
+		if (changed === false) { return false; }
+		this.setRawItems(raw, items);
+		this.saveRaw(root, raw, configuredPath);
+		return true;
+	}
+
+	static load(root: string, configuredPath = 'prd.json'): Prd | null {
+		const prdPath = this.prdPath(root, configuredPath);
+		if (!fs.existsSync(prdPath)) { return null; }
+		try {
+			const raw = this.loadRaw(root, configuredPath) as RawPrd | null;
+			if (!raw) { return null; }
 			const rawItems: RawItem[] = Array.isArray(raw.issues)
 				? raw.issues
 				: Array.isArray(raw.userStories) ? raw.userStories : [];
