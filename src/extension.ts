@@ -203,7 +203,7 @@ async function initProject(root: string, output: vscode.OutputChannel) {
 	}
 
 	if (fs.existsSync(ralphDir)) {
-		const statusFiles = fs.readdirSync(ralphDir).filter(f => f.endsWith('-status'));
+		const statusFiles = fs.readdirSync(ralphDir).filter((f: string) => f.endsWith('-status'));
 		if (statusFiles.length > 0) {
 			const action = await vscode.window.showWarningMessage(
 				`Found ${statusFiles.length} task status file(s) in .ralph/ from a previous project.`,
@@ -211,8 +211,8 @@ async function initProject(root: string, output: vscode.OutputChannel) {
 			);
 			if (!action || action === 'Cancel') { return; }
 			if (action === 'Clear .ralph/ and continue') {
-				for (const f of fs.readdirSync(ralphDir)) {
-					try { fs.unlinkSync(path.join(ralphDir, f)); } catch { /**/ }
+				for (const f of fs.readdirSync(ralphDir) as string[]) {
+										try { fs.unlinkSync(path.join(ralphDir, f)); } catch { /**/ }
 				}
 			}
 		}
