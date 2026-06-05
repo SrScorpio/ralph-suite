@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { RalphStateManager } from './stateManager';
+import { RalphStateManager, safeTaskId } from './stateManager';
 
 export interface Issue {
 	id: string;
@@ -65,17 +65,42 @@ function normalizeStatus(raw: string | undefined): Issue['status'] {
 	return 'todo';
 }
 
-function normalizeItem(raw: RawItem): Issue {
+function asString(raw: unknown, fallback = ''): string {
+	return typeof raw === 'string' ? raw.trim() : fallback;
+}
+
+function asStringArray(raw: unknown): string[] {
+	if (!Array.isArray(raw)) { return []; }
+	return raw
+		.filter((v): v is string => typeof v === 'string')
+		.map(v => v.trim())
+		.filter(Boolean)
+		.slice(0, 100);
+}
+
+function uniqueId(rawId: unknown, index: number, usedIds: Set<string>): string {
+	const base = safeTaskId(asString(rawId, `ISSUE-${String(index + 1).padStart(3, '0')}`));
+	let id = base;
+	let n = 2;
+	while (usedIds.has(id)) {
+		id = `${base}-${n}`;
+		n++;
+	}
+	usedIds.add(id);
+	return id;
+}
+
+function normalizeItem(raw: RawItem, index: number, usedIds: Set<string>): Issue {
 	return {
-		id:                 raw.id,
-		title:              raw.title,
-		description:        raw.description ?? '',
-		epic:               raw.epic,
+		id:                 uniqueId(raw.id, index, usedIds),
+		title:              asString(raw.title, 'Untitled task').slice(0, 240),
+		description:        asString(raw.description).slice(0, 4000),
+		epic:               raw.epic ? asString(raw.epic).slice(0, 120) : undefined,
 		priority:           normalizePriority(raw.priority),
 		status:             normalizeStatus(raw.status),
-		acceptanceCriteria: raw.acceptanceCriteria ?? [],
-		dependencies:       raw.dependencies ?? [],
-		labels:             raw.labels ?? [],
+		acceptanceCriteria: asStringArray(raw.acceptanceCriteria),
+		dependencies:       asStringArray(raw.dependencies).map(safeTaskId),
+		labels:             asStringArray(raw.labels).map(l => l.slice(0, 80)),
 	};
 }
 
@@ -85,12 +110,17 @@ export class PrdManager {
 		if (!fs.existsSync(prdPath)) return null;
 		try {
 			const raw = JSON.parse(fs.readFileSync(prdPath, 'utf-8')) as RawPrd;
-			const rawItems: RawItem[] = raw.issues ?? raw.userStories ?? [];
-			const issues: Issue[] = rawItems.map(normalizeItem);
+			const rawItems: RawItem[] = Array.isArray(raw.issues)
+				? raw.issues
+				: Array.isArray(raw.userStories) ? raw.userStories : [];
+			const usedIds = new Set<string>();
+			const issues: Issue[] = rawItems
+				.filter((item): item is RawItem => !!item && typeof item === 'object')
+				.map((item, index) => normalizeItem(item, index, usedIds));
 			const prd: Prd = {
-				project:     raw.project ?? 'Unnamed Project',
-				description: raw.description ?? '',
-				version:     raw.version ?? '1.0.0',
+				project:     asString(raw.project, 'Unnamed Project').slice(0, 160),
+				description: asString(raw.description).slice(0, 2000),
+				version:     asString(raw.version, '1.0.0').slice(0, 40),
 				issues,
 			};
 			const statuses = RalphStateManager.getAllStatuses(root);

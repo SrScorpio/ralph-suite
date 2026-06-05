@@ -366,8 +366,21 @@ export function getKanbanHtml(
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function esc(s: string): string {
-	return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+export function esc(s: unknown): string {
+	return String(s ?? '')
+		.replace(/&/g,'&amp;')
+		.replace(/</g,'&lt;')
+		.replace(/>/g,'&gt;')
+		.replace(/"/g,'&quot;')
+		.replace(/'/g,'&#39;');
+}
+
+export function escJsArg(s: unknown): string {
+	return esc(JSON.stringify(String(s ?? '')));
+}
+
+export function escAttr(s: unknown): string {
+	return esc(String(s ?? '').replace(/[\u0000-\u001f\u007f]/g, ''));
 }
 
 const PRIORITY_DOT: Record<string, string> = { P0:'#f85149', P1:'#e3b341', P2:'#58a6ff', P3:'#6e7681' };
@@ -376,9 +389,12 @@ const PRIORITY_LABEL: Record<string, string> = { P0:'Critical', P1:'High', P2:'M
 function card(issue: Issue, log: TaskLog | null): string {
 	const pc = PRIORITY_DOT[issue.priority] ?? '#6e7681';
 	const pl = PRIORITY_LABEL[issue.priority] ?? issue.priority;
-	const deps = issue.dependencies?.length ? `<div class="card-deps">⛓ ${issue.dependencies.join(', ')}</div>` : '';
+	const deps = issue.dependencies?.length ? `<div class="card-deps">⛓ ${esc(issue.dependencies.join(', '))}</div>` : '';
 	const epic = issue.epic ? `<span class="card-epic">${esc(issue.epic)}</span>` : '';
 	const labels = (issue.labels ?? []).map(l => `<span class="card-label">${esc(l)}</span>`).join('');
+	const idAttr = escAttr(issue.id);
+	const statusAttr = escAttr(issue.status);
+	const idJs = escJsArg(issue.id);
 
 	let logBadge = '';
 	if (log?.status === 'completed' && log.durationMin !== undefined) {
@@ -394,19 +410,19 @@ function card(issue: Issue, log: TaskLog | null): string {
 	const criteriaTooltip = criteriaCount > 0 ? issue.acceptanceCriteria.map((ac,i) => `${i+1}. ${ac}`).join('\n') : '';
 
 	let actions = '';
-	if (issue.status === 'todo')        { actions = `<button class="btn btn-run" onclick="send('runTask','${issue.id}')">▶ Run</button>`; }
+	if (issue.status === 'todo')        { actions = `<button class="btn btn-run" onclick="send(&quot;runTask&quot;,${idJs})">▶ Run</button>`; }
 	else if (issue.status === 'blocked'){ actions = `<button class="btn btn-disabled" disabled>⛓ Blocked</button>`; }
-	else if (issue.status === 'inprogress') { actions = `<button class="btn btn-run" onclick="send('contextRefresh','${issue.id}')" title="Send context recovery prompt to chat">🔄 Refresh</button><button class="btn btn-done" onclick="send('markDone','${issue.id}')">✓ Mark done</button>`; }
-	else { actions = `<button class="btn btn-note" onclick="send('addNote','${issue.id}')" title="Add note">✎</button><button class="btn btn-reset" onclick="send('resetTask','${issue.id}')">↩ Reset</button>`; }
+	else if (issue.status === 'inprogress') { actions = `<button class="btn btn-run" onclick="send(&quot;contextRefresh&quot;,${idJs})" title="Send context recovery prompt to chat">🔄 Refresh</button><button class="btn btn-done" onclick="send(&quot;markDone&quot;,${idJs})">✓ Mark done</button>`; }
+	else { actions = `<button class="btn btn-note" onclick="send(&quot;addNote&quot;,${idJs})" title="Add note">✎</button><button class="btn btn-reset" onclick="send(&quot;resetTask&quot;,${idJs})">↩ Reset</button>`; }
 
-	return `<div class="card" draggable="true" data-id="${issue.id}" data-status="${issue.status}"
+	return `<div class="card" draggable="true" data-id="${idAttr}" data-status="${statusAttr}"
      ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"
      ondragover="onCardDragOver(event)" ondrop="onCardDrop(event)">
   <div class="card-header">
     <div class="card-header-left"><span class="card-id">${esc(issue.id)}</span>${epic}${labels}</div>
     <div class="card-header-right"><span class="priority-dot" style="background:${pc}" title="${pl}"></span>${logBadge}</div>
   </div>
-  <div class="card-title" onclick="send('showEditIssue','${issue.id}')" title="Click to edit">${esc(issue.title)}</div>
+  <div class="card-title" onclick="send(&quot;showEditIssue&quot;,${idJs})" title="Click to edit">${esc(issue.title)}</div>
   ${issue.description ? `<div class="card-desc">${esc(issue.description.slice(0,100))}${issue.description.length>100?'…':''}</div>` : ''}
   ${noteHtml}${deps}
   <div class="card-footer">

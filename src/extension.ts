@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { KanbanPanel } from './kanbanPanel';
-import { RalphStateManager } from './stateManager';
+import { RalphStateManager, safeTaskId } from './stateManager';
 import { PrdManager } from './prdManager';
 import { loadAndInjectContext } from './contextInjector';
 
@@ -517,11 +517,20 @@ function buildPrompt(task: any, prd: any, workspaceRoot: string): string {
 	const cfg    = vscode.workspace.getConfiguration('ralph-suite');
 	const guardrails: string[] = cfg.get('guardrails', []);
 	const boundaries: string[] = cfg.get('boundaries', []);
+	const profile = resolveAgentProfile(task, cfg);
 	const ralphDir   = path.join(workspaceRoot, '.ralph').replace(/\\/g, '/');
-	const statusFile = `${ralphDir}/task-${task.id}-status`;
-	const noteFile   = `${ralphDir}/task-${task.id}-note`;
+	const safeId = safeTaskId(task.id);
+	const statusFile = `${ralphDir}/task-${safeId}-status`;
+	const noteFile   = `${ralphDir}/task-${safeId}-note`;
 
 	return [
+		`## Agent Profile`,
+		`**Engine:** ${profile.engine}`,
+		profile.model ? `**Recommended model:** ${profile.model}` : '**Recommended model:** provider default',
+		`**Mode:** ${profile.mode}`,
+		`**Task type:** ${profile.taskType}`,
+		'Note: if the current chat provider cannot be forced to this model, use this as an explicit manual selection recommendation.',
+		'',
 		memory ? `## Project Memory\n${memory}\n` : '',
 		`## Task: ${task.id} — ${task.title}`,
 		`**Epic:** ${task.epic || 'General'}`,
@@ -535,7 +544,9 @@ function buildPrompt(task: any, prd: any, workspaceRoot: string): string {
 		boundaries.length ? `\n**Never touch:**\n${boundaries.map((b: string) => `- ${b}`).join('\n')}` : '',
 		'',
 		'---',
-		'Execute directly. No questions. Keep passing parts if something fails.',
+		'Execute directly. No questions unless a checkpoint is hit.',
+		'Before editing, inspect current files and preserve unrelated user changes.',
+		'After editing, run the narrowest relevant verification command available.',
 		'⚠️ Do NOT modify prd.json.',
 		'',
 		'━━━ COMPLETION SIGNALS (both required) ━━━',
@@ -543,8 +554,44 @@ function buildPrompt(task: any, prd: any, workspaceRoot: string): string {
 		`   The file must contain ONLY the word "completed" — nothing else, no extra lines.`,
 		`2. Write \`NOTA: <one line summary>\` to: ${noteFile}`,
 		`   Example: NOTA: Created plugin skeleton with admin menu and REST endpoint stubs`,
+		`   Stable memory promotion is explicit: use DECISION:, MEMORIA:, BUG:, or CONVENCION: only for reusable project knowledge.`,
 		'Do NOT skip either step. Do NOT append — overwrite.',
 	].filter(Boolean).join('\n');
+}
+
+interface AgentProfile {
+	engine: string;
+	model: string;
+	mode: string;
+	taskType: string;
+}
+
+function inferTaskType(task: any): string {
+	const text = [
+		task.title ?? '',
+		task.description ?? '',
+		task.epic ?? '',
+		...(Array.isArray(task.labels) ? task.labels : []),
+	].join(' ').toLowerCase();
+	if (/security|sanitize|xss|csp|auth|token|secret|cors/.test(text)) { return 'security'; }
+	if (/review|audit|revis/.test(text)) { return 'review'; }
+	if (/bug|fix|error|fail|crash|regression/.test(text)) { return 'bugfix'; }
+	if (/test|spec|coverage|verify|verif/.test(text)) { return 'test'; }
+	if (/doc|readme|manual/.test(text)) { return 'docs'; }
+	if (/refactor|architecture|arquitectura/.test(text)) { return 'refactor'; }
+	return 'default';
+}
+
+function resolveAgentProfile(task: any, cfg: vscode.WorkspaceConfiguration): AgentProfile {
+	const taskType = inferTaskType(task);
+	const profiles = cfg.get<Record<string, Partial<AgentProfile>>>('modelProfiles', {});
+	const selected = profiles[taskType] ?? profiles.default ?? {};
+	return {
+		engine: selected.engine ?? cfg.get<string>('engine', 'copilot'),
+		model: selected.model ?? '',
+		mode: selected.mode ?? 'execute',
+		taskType,
+	};
 }
 
 function buildInitPrompt(goal: string, workspaceRoot: string): string {

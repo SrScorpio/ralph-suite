@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { PrdManager, Issue, Prd } from './prdManager';
-import { RalphStateManager, TaskLog } from './stateManager';
+import { RalphStateManager, TaskLog, safeTaskId } from './stateManager';
 import { getShellHtml, getBoardContent, BoardConfig } from './webview/kanbanHtml';
 import { loadAndInjectContext } from './contextInjector';
 
@@ -258,25 +258,32 @@ export class KanbanPanel {
 		switch (msg.type) {
 
 			case 'runTask':
-				await vscode.commands.executeCommand('ralph-suite.runTask', msg.id);
+				{
+					const id = safeMessageId(msg.id);
+					if (!id) { break; }
+					await vscode.commands.executeCommand('ralph-suite.runTask', id);
+				}
 				break;
 
 			case 'markDone': {
+				const id = safeMessageId(msg.id);
+				if (!id) { break; }
 				const summary = await vscode.window.showInputBox({
-					title: `Done: ${msg.id}`,
+					title: `Done: ${id}`,
 					prompt: 'Brief summary (saved to project memory)',
 					placeHolder: 'e.g. Created runpod/requirements.txt with pinned versions',
 					ignoreFocusOut: true
 				});
-				RalphStateManager.setCompleted(this.root, msg.id, summary ?? undefined);
+				RalphStateManager.setCompleted(this.root, id, summary ?? undefined);
 				this.render();
 				if (this.autoRun) { this.scheduleNextTask(2000); }
 				break;
 			}
 
 			case 'moveCard': {
-				const { id, status } = msg;
-				if (!id || !status) { break; }
+				const id = safeMessageId(msg.id);
+				const status = msg.status;
+				if (!id || !isBoardStatus(status)) { break; }
 				KanbanPanel.output?.appendLine(`[Board] Move ${id} → ${status}`);
 				if (status === 'completed') {
 					const summary = await vscode.window.showInputBox({
@@ -298,7 +305,9 @@ export class KanbanPanel {
 			}
 
 			case 'reorderCard': {
-				const { id, targetId, before } = msg;
+				const id = safeMessageId(msg.id);
+				const targetId = safeMessageId(msg.targetId);
+				const before = msg.before === true;
 				if (!id || !targetId) { break; }
 				const prdPathR = path.join(this.root, 'prd.json');
 				if (!fs.existsSync(prdPathR)) { break; }
@@ -324,15 +333,17 @@ export class KanbanPanel {
 			}
 
 			case 'addNote': {
+				const id = safeMessageId(msg.id);
+				if (!id) { break; }
 				const note = await vscode.window.showInputBox({
-					title: `Add note: ${msg.id}`,
+					title: `Add note: ${id}`,
 					prompt: 'One line note — saved to log.json and memories.md',
 					placeHolder: 'e.g. Fixed CORS headers, added Authorization to allowed list',
 					ignoreFocusOut: true
 				});
 				if (!note) { break; }
 				// Load log, inject note, save, append to memories
-				const lp = path.join(this.root, '.ralph', `task-${msg.id}-log.json`);
+				const lp = RalphStateManager.logPath(this.root, id);
 				if (fs.existsSync(lp)) {
 					try {
 						const log = JSON.parse(fs.readFileSync(lp, 'utf-8'));
@@ -410,8 +421,10 @@ export class KanbanPanel {
 
 			case 'showEditIssue': {
 				// Send full issue data to webview for the edit modal
+				const id = safeMessageId(msg.id);
+				if (!id) { break; }
 				const prdE = PrdManager.load(this.root);
-				const issue = prdE?.issues.find(i => i.id === msg.id);
+				const issue = prdE?.issues.find(i => i.id === id);
 				if (issue) {
 					this.panel.webview.postMessage({ type: 'openEditModal', issue });
 				}
@@ -420,8 +433,10 @@ export class KanbanPanel {
 
 			case 'editIssue': {
 				// Save edited issue back to prd.json
-				const { id, fields } = msg;
+				const id = safeMessageId(msg.id);
+				const fields = cleanIssueFields(msg.fields);
 				if (!id || !fields) { break; }
+				if (!fields.title) { break; }
 				const prdPathE = path.join(this.root, 'prd.json');
 				if (!fs.existsSync(prdPathE)) { break; }
 				try {
@@ -429,7 +444,7 @@ export class KanbanPanel {
 					const items = raw.issues ?? raw.userStories ?? [];
 					const idx   = items.findIndex((i: any) => i.id === id);
 					if (idx === -1) { break; }
-					// Merge fields — only update what was sent
+					// Merge allowlisted fields only.
 					items[idx] = { ...items[idx], ...fields };
 					if (raw.issues)      { raw.issues = items; }
 					else if (raw.userStories) { raw.userStories = items; }
@@ -445,6 +460,8 @@ export class KanbanPanel {
 			case 'addIssue': {
 				const prd = PrdManager.load(this.root);
 				if (!prd) { vscode.window.showErrorMessage('No prd.json found.'); break; }
+				const fields = cleanIssueFields(msg.issue);
+				if (!fields.title) { break; }
 
 				const prdPath = path.join(this.root, 'prd.json');
 				const raw     = JSON.parse(fs.readFileSync(prdPath, 'utf-8'));
@@ -456,14 +473,14 @@ export class KanbanPanel {
 
 				const newIssue = {
 					id:                 newId,
-					title:              msg.issue.title,
-					description:        msg.issue.description ?? '',
-					epic:               msg.issue.epic,
-					priority:           msg.issue.priority ?? 'P2',
+					title:              fields.title,
+					description:        fields.description ?? '',
+					epic:               fields.epic,
+					priority:           fields.priority ?? 'P2',
 					status:             'todo',
-					acceptanceCriteria: msg.issue.acceptanceCriteria ?? [],
+					acceptanceCriteria: fields.acceptanceCriteria ?? [],
 					dependencies:       [],
-					labels:             msg.issue.labels ?? [],
+					labels:             fields.labels ?? [],
 				};
 
 				items.push(newIssue);
@@ -602,7 +619,7 @@ export class KanbanPanel {
 				break;
 
 			case 'contextRefresh': {
-				const taskId = msg.id;
+				const taskId = safeMessageId(msg.id);
 				if (!taskId) { break; }
 				KanbanPanel.output?.appendLine(`[Board] Context refresh requested for ${taskId}`);
 				const prdCR = PrdManager.load(this.root);
@@ -627,6 +644,45 @@ export class KanbanPanel {
 				break;
 		}
 	}
+}
+
+function safeMessageId(raw: unknown): string | null {
+	if (typeof raw !== 'string') { return null; }
+	const id = safeTaskId(raw);
+	return id === raw.trim() && id !== 'UNKNOWN' ? id : null;
+}
+
+function isBoardStatus(raw: unknown): raw is Issue['status'] {
+	return raw === 'todo' || raw === 'inprogress' || raw === 'completed' || raw === 'blocked';
+}
+
+function cleanText(raw: unknown, max = 1000): string {
+	return typeof raw === 'string' ? raw.trim().slice(0, max) : '';
+}
+
+function cleanTextArray(raw: unknown, maxItems = 100): string[] {
+	if (!Array.isArray(raw)) { return []; }
+	return raw
+		.filter((v): v is string => typeof v === 'string')
+		.map(v => v.trim())
+		.filter(Boolean)
+		.slice(0, maxItems);
+}
+
+function cleanPriority(raw: unknown): Issue['priority'] {
+	return raw === 'P0' || raw === 'P1' || raw === 'P2' || raw === 'P3' ? raw : 'P2';
+}
+
+function cleanIssueFields(raw: any): Partial<Issue> {
+	return {
+		title:              cleanText(raw?.title, 240),
+		description:        cleanText(raw?.description, 4000),
+		epic:               cleanText(raw?.epic, 120) || undefined,
+		priority:           cleanPriority(raw?.priority),
+		acceptanceCriteria: cleanTextArray(raw?.acceptanceCriteria),
+		labels:             cleanTextArray(raw?.labels).map(l => l.slice(0, 80)),
+		dependencies:       cleanTextArray(raw?.dependencies).map(safeTaskId),
+	};
 }
 
 // ── GitHub prompt builders ────────────────────────────────────────────────────
@@ -934,8 +990,9 @@ export function buildContextRefreshPrompt(
 	const total = prd.issues.length;
 
 	const ralphDir = path.join(workspaceRoot, '.ralph').replace(/\\/g, '/');
-	const statusFile = `${ralphDir}/task-${task.id}-status`;
-	const noteFile = `${ralphDir}/task-${task.id}-note`;
+	const safeId = safeTaskId(task.id);
+	const statusFile = `${ralphDir}/task-${safeId}-status`;
+	const noteFile = `${ralphDir}/task-${safeId}-note`;
 
 	return [
 		'## ⚡ Context Refresh — Mid-Task Recovery',
@@ -964,7 +1021,8 @@ export function buildContextRefreshPrompt(
 		'━━━ COMPLETION SIGNALS (both required) ━━━',
 		`1. Write (overwrite, not append) the single word \`completed\` to: ${statusFile}`,
 		'   The file must contain ONLY the word "completed" — nothing else, no extra lines.',
-		`2. Write \`NOTA: <one line summary>\` to: ${noteFile}`,
-		'Do NOT skip either step. Do NOT append — overwrite.',
-	].filter(Boolean).join('\n');
-}
+			`2. Write \`NOTA: <one line summary>\` to: ${noteFile}`,
+			'   Stable memory promotion is explicit: use DECISION:, MEMORIA:, BUG:, or CONVENCION: only for reusable project knowledge.',
+			'Do NOT skip either step. Do NOT append — overwrite.',
+		].filter(Boolean).join('\n');
+	}

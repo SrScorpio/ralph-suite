@@ -4,6 +4,56 @@ import * as path from 'path';
 const RALPH_DIR = '.ralph';
 const AGENT_DIR = '.agent';
 
+export function safeTaskId(id: unknown): string {
+	const safe = String(id ?? '')
+		.trim()
+		.replace(/[^A-Za-z0-9_.-]/g, '_')
+		.slice(0, 80);
+	return safe || 'UNKNOWN';
+}
+
+type MemoryKind = 'Project' | 'Conventions' | 'Decisions' | 'Known Issues';
+
+function promotedMemoryNote(raw: string): { kind: MemoryKind; text: string } | null {
+	const note = raw.trim();
+	const match = note.match(/^(MEMORIA|MEMORY|DECISION|DECISION:|DECISIÓN|BUG|KNOWN_ISSUE|CONVENCION|CONVENCIÓN|CONVENTION):\s*(.+)$/i);
+	if (!match) { return null; }
+	const key = match[1].toUpperCase();
+	const text = match[2].trim();
+	if (!text) { return null; }
+	if (key === 'DECISION' || key === 'DECISION:' || key === 'DECISIÓN') { return { kind: 'Decisions', text }; }
+	if (key === 'BUG' || key === 'KNOWN_ISSUE') { return { kind: 'Known Issues', text }; }
+	if (key === 'CONVENCION' || key === 'CONVENCIÓN' || key === 'CONVENTION') { return { kind: 'Conventions', text }; }
+	return { kind: 'Project', text };
+}
+
+function appendToMemorySection(content: string, section: MemoryKind, lines: string[]): string {
+	const entry = lines.join('\n') + '\n';
+	const heading = `## ${section}`;
+	const contentLines = content.split('\n');
+	const headingLine = contentLines.findIndex(line => line.trim() === heading);
+	const sectionStart = headingLine === -1
+		? -1
+		: contentLines.slice(0, headingLine).join('\n').length + (headingLine > 0 ? 1 : 0);
+	if (sectionStart === -1) {
+		const sep = content.endsWith('\n') ? '' : '\n';
+		return `${content}${sep}\n${heading}\n${entry}`;
+	}
+	const afterStart = content.indexOf('\n', sectionStart);
+	if (afterStart === -1) {
+		return `${content}\n${entry}`;
+	}
+	const nextSection = content.slice(afterStart + 1).search(/^##\s+/m);
+	if (nextSection === -1) {
+		const sep = content.endsWith('\n') ? '' : '\n';
+		return `${content}${sep}${entry}`;
+	}
+	const insertAt = afterStart + 1 + nextSection;
+	const before = content.slice(0, insertAt).replace(/\s*$/, '\n');
+	const after = content.slice(insertAt);
+	return `${before}${entry}\n${after}`;
+}
+
 export interface TaskLog {
 	id: string;
 	title: string;
@@ -22,10 +72,10 @@ export class RalphStateManager {
 	static ralphDir(root: string) { return path.join(root, RALPH_DIR); }
 	static agentDir(root: string) { return path.join(root, AGENT_DIR); }
 	static statusPath(root: string, id: string) {
-		return path.join(this.ralphDir(root), `task-${id}-status`);
+		return path.join(this.ralphDir(root), `task-${safeTaskId(id)}-status`);
 	}
 	static logPath(root: string, id: string) {
-		return path.join(this.ralphDir(root), `task-${id}-log.json`);
+		return path.join(this.ralphDir(root), `task-${safeTaskId(id)}-log.json`);
 	}
 	static memoriesPath(root: string) {
 		return path.join(this.agentDir(root), 'memories.md');
@@ -144,7 +194,7 @@ export class RalphStateManager {
 
 	// ── Log access ───────────────────────────────────────────────────────────
 	static notePath(root: string, id: string) {
-		return path.join(this.ralphDir(root), `task-${id}-note`);
+		return path.join(this.ralphDir(root), `task-${safeTaskId(id)}-note`);
 	}
 
 	/**
@@ -230,18 +280,18 @@ export class RalphStateManager {
 		const noteText = rawNote.trimStart().toUpperCase().startsWith('NOTA:')
 			? rawNote.trimStart().slice(5).trim()
 			: rawNote.trim();
+		const promoted = promotedMemoryNote(noteText);
+		if (!promoted) { return; }
 
 		const entry = [
-			`\n## [${date}] ${log.id}: ${log.title}`,
-			`- **Duration:** ${log.durationMin ?? '?'} min`,
-			noteText ? `- **Note:** ${noteText}` : '',
+			`- [${date}] ${log.id}: ${promoted.text}`,
 			log.filesChanged?.length
 				? `- **Files:** ${log.filesChanged.slice(0, 5).join(', ')}${log.filesChanged.length > 5 ? ` +${log.filesChanged.length - 5} more` : ''}`
 				: '',
 			'',
 		].filter(l => l !== '').join('\n');
 
-		fs.writeFileSync(mp, content + entry, 'utf-8');
+		fs.writeFileSync(mp, appendToMemorySection(content, promoted.kind, entry.split('\n')), 'utf-8');
 	}
 
 	static initMemories(root: string, projectGoal: string) {

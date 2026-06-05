@@ -91,11 +91,38 @@
           "type": "string",
           "enum": [
             "copilot",
+            "codex",
             "claude",
             "opencode"
           ],
           "default": "copilot",
           "description": "%config.engine.description%"
+        },
+        "ralph-suite.modelProfiles": {
+          "type": "object",
+          "default": {
+            "default": {
+              "engine": "copilot",
+              "model": "",
+              "mode": "execute"
+            },
+            "bugfix": {
+              "engine": "codex",
+              "model": "gpt-5-codex",
+              "mode": "execute"
+            },
+            "review": {
+              "engine": "codex",
+              "model": "gpt-5",
+              "mode": "review"
+            },
+            "security": {
+              "engine": "codex",
+              "model": "gpt-5",
+              "mode": "security-audit"
+            }
+          },
+          "description": "Agent/model recommendations by task type. Ralph cannot force every chat provider to use a model; this is injected as an explicit recommendation."
         },
         "ralph-suite.maxLoops": {
           "type": "number",
@@ -234,7 +261,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "package": "vsce package --no-dependencies",
-    "test": "npx mocha --require ts-node/register 'src/test/**/*.test.ts' --timeout 10000"
+    "test": "npx mocha --require ts-node/register --require ./src/test/vscodeMock.js 'src/test/**/*.test.ts' --timeout 10000"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.0",
