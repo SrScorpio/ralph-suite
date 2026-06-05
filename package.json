@@ -15,6 +15,10 @@
   ],
   "main": "./dist/extension.js",
   "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SrScorpio/ralph-suite.git"
+  },
   "contributes": {
     "commands": [
       {
