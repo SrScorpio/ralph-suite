@@ -1,7 +1,15 @@
 .vscode/**
 src/**
 node_modules/**
+.agent/**
+.ralph/**
+compiled/**
+plans/**
+.github/**
 .gitignore
 tsconfig.json
 example-prd.json
+package-lock.json
+AGENTS.md
+**/.DS_Store
 **/*.map
