@@ -7,6 +7,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { RalphStateManager } from '../stateManager';
 import { sendToChat } from '../chatLauncher';
 
 // ── Prompt builder ───────────────────────────────────────────────────────────
@@ -42,7 +43,8 @@ export async function optimizeMemory(
 	output: vscode.OutputChannel,
 	review: boolean
 ): Promise<void> {
-	const memoriesPath = path.join(root, '.agent', 'memories.md');
+	const configuredPath = vscode.workspace.getConfiguration('ralph-suite').get<string>('memoriesPath', '.agent/memories.md');
+	const memoriesPath = RalphStateManager.memoriesPath(root, configuredPath);
 	if (!fs.existsSync(memoriesPath)) {
 		vscode.window.showInformationMessage('No memories.md found — nothing to optimize.');
 		return;

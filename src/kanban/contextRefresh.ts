@@ -12,7 +12,8 @@ import { loadAndInjectContext } from '../contextInjector';
 export function buildContextRefreshPrompt(
 	workspaceRoot: string,
 	task: Issue,
-	prd: Prd
+	prd: Prd,
+	configuredMemoriesPath: string = '.agent/memories.md'
 ): string {
 	// Use ISSUE-002 intelligent context injection (excludes Task History)
 	const injection = loadAndInjectContext(
@@ -20,7 +21,8 @@ export function buildContextRefreshPrompt(
 		task.description || '',
 		task.dependencies || [],
 		task.labels || [],
-		task.epic
+		task.epic,
+		configuredMemoriesPath
 	);
 	const memory = injection ? injection.injected : '';
 

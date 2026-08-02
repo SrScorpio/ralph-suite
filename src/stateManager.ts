@@ -77,8 +77,17 @@ export class RalphStateManager {
 	static logPath(root: string, id: string) {
 		return path.join(this.ralphDir(root), `task-${safeTaskId(id)}-log.json`);
 	}
-	static memoriesPath(root: string) {
-		return path.join(this.agentDir(root), 'memories.md');
+	static memoriesPath(root: string, configuredPath = '.agent/memories.md'): string {
+		const rootPath = path.resolve(root);
+		const target = path.isAbsolute(configuredPath)
+			? configuredPath
+			: path.join(rootPath, configuredPath || '.agent/memories.md');
+		const resolved = path.resolve(target);
+		// Prevent path traversal outside the workspace (mirrors PrdManager.prdPath)
+		if (resolved !== rootPath && !resolved.startsWith(rootPath + path.sep)) {
+			return path.join(this.agentDir(root), 'memories.md');
+		}
+		return resolved;
 	}
 
 	// ── Init ─────────────────────────────────────────────────────────────────

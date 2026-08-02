@@ -1,9 +1,8 @@
 {
   "extension.displayName": "Ralph Suite",
   "extension.description": "Ejecutor aut\u00f3nomo de tareas con IA, tablero Kanban, memoria de proyecto y soporte multi-motor.",
-  "config.engine.description": "Motor de IA para ejecutar las tareas (copilot, claude, opencode).",
+  "config.engine.description": "Motor de IA para ejecutar las tareas (copilot, codex, claude, opencode).",
   "config.maxLoops.description": "N\u00famero m\u00e1ximo de tareas a ejecutar por sesi\u00f3n de auto-ejecuci\u00f3n antes de pausar.",
-  "config.autoRun.description": "Iniciar autom\u00e1ticamente la siguiente tarea cuando la actual se completa.",
   "config.freshContext.description": "Abrir una nueva ventana de chat para cada tarea (contexto limpio, sin historial previo entre tareas). Recomendado: activado.",
   "config.prdPath.description": "Ruta al archivo prd.json relativa a la ra\u00edz del workspace.",
   "config.memoriesPath.description": "Ruta al archivo de memorias del proyecto relativa a la ra\u00edz del workspace.",
@@ -19,6 +18,5 @@
   "config.agentCheckpoints.description": "Acciones que requieren confirmaci\u00f3n antes de que el agente las ejecute (ej. eliminar archivos, modificar esquema de BD).",
   "config.memoryOptimizeEvery.description": "Optimizar memories.md autom\u00e1ticamente cada N tareas completadas (0 = desactivado). Cuando se activa, ejecuta una compresi\u00f3n antes de la siguiente tarea.",
   "config.memoryOptimizeReview.description": "Si est\u00e1 activado, muestra el prompt de optimizaci\u00f3n en el Chat para revisar antes de ejecutarlo. Si est\u00e1 desactivado, el agente reescribe memories.md directamente sin confirmaci\u00f3n.",
-  "config.memoryOptimizeAutoApply.description": "Al auto-optimizar, aplicar el resultado directamente a memories.md sin revisi\u00f3n (activado), o abrirlo en el Chat para revisarlo primero (desactivado).",
   "command.optimizeMemory.title": "Ralph: Optimizar Memoria del Proyecto"
 }

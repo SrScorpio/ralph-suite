@@ -76,7 +76,7 @@ export class KanbanPanel {
 			this.render();
 		});
 		watch(new vscode.RelativePattern(this.root, 'prd.json'),          () => this.render());
-		watch(new vscode.RelativePattern(this.root, '.agent/memories.md'), () => this.render());
+		watch(new vscode.RelativePattern(this.root, path.relative(this.root, RalphStateManager.memoriesPath(this.root, this.memoriesPathSetting())) || '.agent/memories.md'), () => this.render());
 	}
 
 	static createOrShow(extensionUri: vscode.Uri, root: string, output: vscode.OutputChannel) {
@@ -122,7 +122,7 @@ export class KanbanPanel {
 		if (this.disposed) { return; }
 		try {
 			const prd      = PrdManager.load(this.root, this.prdPathSetting());
-			const memories = this.loadFile(path.join(this.root, '.agent', 'memories.md'));
+			const memories = this.loadFile(RalphStateManager.memoriesPath(this.root, this.memoriesPathSetting()));
 			const logs     = this.loadLogs();
 			const cfg      = this.getBoardConfig();
 			this.panel.title = prd ? `${prd.project} — Board` : 'Ralph Board';
@@ -183,6 +183,10 @@ export class KanbanPanel {
 
 	private prdPathSetting(): string {
 		return vscode.workspace.getConfiguration('ralph-suite').get<string>('prdPath', 'prd.json');
+	}
+
+	private memoriesPathSetting(): string {
+		return vscode.workspace.getConfiguration('ralph-suite').get<string>('memoriesPath', '.agent/memories.md');
 	}
 
 	// ── Runner ────────────────────────────────────────────────────────────────
@@ -608,7 +612,7 @@ export class KanbanPanel {
 				if (!prdCR) { vscode.window.showErrorMessage('No prd.json found.'); break; }
 				const taskCR = prdCR.issues.find(i => i.id === taskId);
 				if (!taskCR) { vscode.window.showErrorMessage(`Task ${taskId} not found.`); break; }
-				const prompt = buildContextRefreshPrompt(this.root, taskCR, prdCR);
+				const prompt = buildContextRefreshPrompt(this.root, taskCR, prdCR, this.memoriesPathSetting());
 				await sendToChat(prompt, {
 					fallbackMessage: 'Context refresh prompt copied — paste in Copilot Chat.',
 				});

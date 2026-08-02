@@ -51,8 +51,8 @@ export function resolveAgentProfile(task: any, cfg: vscode.WorkspaceConfiguratio
 
 // ── Memory loader ────────────────────────────────────────────────────────────
 
-export function loadMemory(root: string): string | null {
-	const p = path.join(root, '.agent', 'memories.md');
+export function loadMemory(root: string, configuredPath: string = '.agent/memories.md'): string | null {
+	const p = path.isAbsolute(configuredPath) ? configuredPath : path.join(root, configuredPath);
 	if (!fs.existsSync(p)) { return null; }
 	return fs.readFileSync(p, 'utf-8').trim() || null;
 }
@@ -61,15 +61,17 @@ export function loadMemory(root: string): string | null {
 
 export function buildPrompt(task: any, prd: any, workspaceRoot: string): string {
 	// ISSUE-002: Intelligent context injection (ADR-002)
+	const cfg    = vscode.workspace.getConfiguration('ralph-suite');
+	const memPath = cfg.get<string>('memoriesPath', '.agent/memories.md');
 	const injection = loadAndInjectContext(
 		workspaceRoot,
 		task.description || '',
 		task.dependencies || [],
 		task.labels || [],
-		task.epic
+		task.epic,
+		memPath
 	);
-	const memory = injection ? injection.injected : loadMemory(workspaceRoot);
-	const cfg    = vscode.workspace.getConfiguration('ralph-suite');
+	const memory = injection ? injection.injected : loadMemory(workspaceRoot, memPath);
 	const guardrails: string[] = cfg.get('guardrails', []);
 	const boundaries: string[] = cfg.get('boundaries', []);
 	const profile = resolveAgentProfile(task, cfg);

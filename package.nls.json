@@ -1,9 +1,8 @@
 {
   "extension.displayName": "Ralph Suite",
   "extension.description": "Autonomous AI task runner with Kanban board, project memory and multi-engine support.",
-  "config.engine.description": "AI engine to use for task execution (copilot, claude, opencode).",
+  "config.engine.description": "AI engine to use for task execution (copilot, codex, claude, opencode).",
   "config.maxLoops.description": "Maximum number of tasks to execute per auto-run session before pausing.",
-  "config.autoRun.description": "Automatically start the next task when the current one completes.",
   "config.freshContext.description": "Open a new chat window for each task (fresh context, no history bleeding between tasks). Recommended: true.",
   "config.prdPath.description": "Path to prd.json relative to the workspace root.",
   "config.memoriesPath.description": "Path to the project memories file relative to the workspace root.",
@@ -19,6 +18,5 @@
   "config.agentCheckpoints.description": "Actions that require a confirmation checkpoint before the agent executes them (e.g. delete files, modify DB schema).",
   "config.memoryOptimizeEvery.description": "Auto-optimize memories.md every N completed tasks (0 = disabled). When triggered, runs a compression pass before the next task.",
   "config.memoryOptimizeReview.description": "When true, shows the optimization prompt in Chat so you can review before it runs. When false, the agent rewrites memories.md directly without confirmation.",
-  "config.memoryOptimizeAutoApply.description": "When auto-optimizing, apply the result directly to memories.md without review (true), or open in Chat so you can review first (false).",
   "command.optimizeMemory.title": "Ralph: Optimize Project Memory"
 }

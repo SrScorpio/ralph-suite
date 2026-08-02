@@ -94,3 +94,22 @@ Fecha: 5 de junio de 2026
   - `src/kanban/planImport.ts` → `importPlanToPrd`, `generateNextId`, `buildAddFromChatPrompt`.
   - `src/stateManager.ts`, `src/prdManager.ts`, `src/contextInjector.ts` y `src/webview/kanbanHtml.ts` no se modifican.
 - Consecuencias: Mayor mantenibilidad, ficheros con responsabilidad única (~50-150 líneas cada uno), y menos acoplamiento. Los tests existentes requieren solo ajuste de imports. El cleanup elimina 4 bugs/olores menores sin cambio funcional.
+
+## ADR-015 — Limpieza de settings muertos y cableado de memoriesPath
+- Estado: accepted
+- Fecha: 2026-08-02
+- Contexto: La auditoría de settings (v1.8.0) detectó que `ralph-suite.autoRun` y `ralph-suite.memoryOptimizeAutoApply` estaban declarados en `package.json` pero nunca se leían del config en ningún punto del código. Por el contrario, `ralph-suite.memoriesPath` estaba declarado pero su ruta (`.agent/memories.md`) estaba *hardcodeada* en 4 archivos, ignorando el setting. La descripción de `engine` en los NLS omitía `codex` pese a estar en el enum.
+
+  Investigación del historial (`git log -G` sobre toda la historia del repo): `autoRun` y `memoryOptimizeAutoApply` **nunca fueron cableados**, ni siquiera en el primer commit. `autoRun` estaba presente desde v0.1.0 (18 mar 2026) como setting huérfano.
+
+  Análisis de intención original:
+  - `autoRun`: su descripción ("auto-start next task when current completes") duplicaba la funcionalidad del runner, que ya encadena tareas al pulsar ⚡ Start. El campo `this.autoRun` (instancia) controla el estado del runner y lo setean los botones del board; el setting de config era un concepto paralelo que nunca se conectó. La autonomía real (auto-arrancar el runner al abrir el board) no estaba implementada.
+  - `memoryOptimizeAutoApply`: inverso lógico de `memoryOptimizeReview` (`autoApply=true` ≡ `review=false`). Su probable intención era distinguir comando manual vs auto-trigger (`memoryOptimizeEvery`), pero ambos caminos terminan en `ralph-suite.optimizeMemory`, que ya lee `memoryOptimizeReview`.
+
+- Decisión:
+  1. **Eliminar** `ralph-suite.autoRun` y `ralph-suite.memoryOptimizeAutoApply` (settings huérfanos). El runner se controla exclusivamente vía UI (botones ⚡/⏹). Si en el futuro se quiere autonomía al abrir el board, se reintroduce como nuevo setting *cableado desde el inicio*.
+  2. **Cablear** `ralph-suite.memoriesPath`: sustituir las 4 rutas hardcodeadas por lectura del setting (`memory.ts`, `project.ts`, `contextInjector.ts`, `kanbanPanel.ts`, `promptBuilders.ts`), con protección anti path traversal (espejando `PrdManager.prdPath`) y fallback a `.agent/memories.md`.
+  3. **Consolidar** la dualidad manual/auto-trigger en un único `memoryOptimizeReview`, aplicable a ambos flujos.
+  4. **Corregir** NLS: añadir `codex` a la descripción de `engine` (EN + ES).
+
+- Consecuencias: Configuración coherente — todo lo declarado funciona, todo lo que funciona está declarado, las 17 claves NLS están sincronizadas EN/ES. Se evita la confusión de settings duales con semántica opuesta. Riesgo: si alguien había configurado `autoRun` o `memoryOptimizeAutoApply` en su `settings.json`, esas claves dejarán de tener efecto (no causan error, VS Code las ignora como settings desconocidos).

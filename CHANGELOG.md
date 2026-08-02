@@ -11,6 +11,12 @@ All notable changes to Ralph Suite are documented here.
 - **`@types/vscode`** actualizado a `^1.103.0`
 - **`LogOutputChannel`** — migrado `createOutputChannel` a `{ log: true }` para logging estructurado con niveles y marcas de tiempo
 - **`chatLauncher.ts`** — nuevo módulo centralizado para invocar el Chat de VS Code. Centraliza el patrón `newChat + open + clipboard fallback` que estaba duplicado en 8 sitios (`task.ts`, `memory.ts`, `project.ts`, `kanbanPanel.ts`). Si el comando interno cambia en el futuro, solo se actualiza un archivo
+- **`memoriesPath` conectado** — la ruta `.agent/memories.md` estaba hardcodeada en 4 archivos; ahora se lee del setting `ralph-suite.memoriesPath` en todos los sitios (`memory.ts`, `project.ts`, `contextInjector.ts`, `kanbanPanel.ts`, `promptBuilders.ts`), con protección anti path traversal y fallback al valor por defecto
+- **NLS corregido** — la descripción de `engine` omitía `codex` en EN y ES; ahora lista los 4 motores correctamente
+
+### Removed
+- **`ralph-suite.autoRun`** (setting eliminado) — presente desde el primer commit (v0.1.0), declarado en `package.json` pero **nunca cableado al código** (verificado con `git log -G` sobre toda la historia). Su descripción ("auto-start next task when current completes") duplicaba la funcionalidad del runner, que ya encadena tareas automáticamente al pulsar ⚡ Start. El estado del runner se controla con el campo de instancia `this.autoRun` (seteado por los botones del board), no desde config. Decisión: eliminar el setting muerto y mantener el comportamiento del runner controlado por UI (ver ADR-015).
+- **`ralph-suite.memoryOptimizeAutoApply`** (setting eliminado) — descrito como inverso lógico de `memoryOptimizeReview` (`autoApply=true` ≡ `review=false`) y nunca cableado. Su intención probable era distinguir el comportamiento del comando manual vs el auto-trigger (`memoryOptimizeEvery`), pero ambos caminos terminan llamando al comando `ralph-suite.optimizeMemory`, que ya lee `memoryOptimizeReview`. Decisión: consolidar en un único setting `memoryOptimizeReview` aplicable a ambos casos (manual y auto-trigger), evitando la dualidad confusa (ver ADR-015).
 
 ### Security
 - **CSP estricta con nonce** en el webview (`getShellHtml(nonce)`) — `script-src 'nonce-<nonce>'` (sin `'unsafe-inline'`), restringe recursos externos (`default-src 'none'`), `style-src 'unsafe-inline'` temporalmente

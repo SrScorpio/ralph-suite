@@ -241,9 +241,12 @@ export function loadAndInjectContext(
 	taskDescription: string,
 	taskDependencies: string[],
 	taskLabels: string[] = [],
-	taskEpic?: string
+	taskEpic?: string,
+	configuredMemoriesPath: string = '.agent/memories.md'
 ): InjectionResult | null {
-	const memoriesPath = path.join(workspaceRoot, '.agent', 'memories.md');
+	const memoriesPath = path.isAbsolute(configuredMemoriesPath)
+		? configuredMemoriesPath
+		: path.join(workspaceRoot, configuredMemoriesPath);
 	if (!fs.existsSync(memoriesPath)) {
 		return null;
 	}

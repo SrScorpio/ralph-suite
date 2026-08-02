@@ -58,10 +58,11 @@ export async function initProject(root: string, output: vscode.OutputChannel): P
 	});
 	if (!goal) { return; }
 
-	// Create .agent/memories.md
-	const agentDir = path.join(root, '.agent');
+	// Create memories.md at the configured path (default: .agent/memories.md)
+	const memCfg = vscode.workspace.getConfiguration('ralph-suite').get<string>('memoriesPath', '.agent/memories.md');
+	const memoriesPath = path.isAbsolute(memCfg) ? memCfg : path.join(root, memCfg);
+	const agentDir = path.dirname(memoriesPath);
 	if (!fs.existsSync(agentDir)) { fs.mkdirSync(agentDir, { recursive: true }); }
-	const memoriesPath = path.join(agentDir, 'memories.md');
 	if (!fs.existsSync(memoriesPath)) {
 		fs.writeFileSync(memoriesPath,
 			`# Project Memories\n\n## Project\n- Goal: ${goal}\n- Created: ${new Date().toISOString().slice(0, 10)}\n`,

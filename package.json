@@ -135,11 +135,6 @@
           "maximum": 50,
           "description": "%config.maxLoops.description%"
         },
-        "ralph-suite.autoRun": {
-          "type": "boolean",
-          "default": false,
-          "description": "%config.autoRun.description%"
-        },
         "ralph-suite.freshContext": {
           "type": "boolean",
           "default": true,
@@ -251,11 +246,6 @@
           "type": "boolean",
           "default": true,
           "description": "%config.memoryOptimizeReview.description%"
-        },
-        "ralph-suite.memoryOptimizeAutoApply": {
-          "type": "boolean",
-          "default": false,
-          "description": "%config.memoryOptimizeAutoApply.description%"
         }
       }
     }
