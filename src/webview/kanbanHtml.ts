@@ -23,6 +23,7 @@ export function getShellHtml(): string {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https:; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:;">
 <title>Ralph Board</title>
 <style>
 :root {

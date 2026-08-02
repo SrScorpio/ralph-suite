@@ -4,6 +4,17 @@ All notable changes to Ralph Suite are documented here.
 
 ---
 
+## [Unreleased]
+
+### Changed
+- **Upgrade de engine de VS Code** — `engines.vscode` subido de `^1.90.0` a `^1.103.0` (julio 2025) para alinear con versiones recientes
+- **`@types/vscode`** actualizado a `^1.103.0`
+
+### Security
+- **Content Security Policy en el webview** — añadida CSP estricta en `getShellHtml()` que restringe recursos externos (`default-src 'none'`, límites en `img-src`/`font-src`). Mantiene `'unsafe-inline'` para scripts/estilos temporalmente mientras se completa el refactor de handlers inline documentado en `plans/seguridad.md`.
+
+---
+
 ## [1.7.0] - 2026-06-05
 
 ### Added
