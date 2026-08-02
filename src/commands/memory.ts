@@ -7,7 +7,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { sleep } from './task';
+import { sendToChat } from '../chatLauncher';
 
 // ── Prompt builder ───────────────────────────────────────────────────────────
 
@@ -61,33 +61,20 @@ export async function optimizeMemory(
 
 	if (!review) {
 		// Direct mode — agent rewrites the file without confirmation
-		try {
-			await vscode.commands.executeCommand('workbench.action.chat.newChat');
-			await sleep(400);
-			await vscode.commands.executeCommand('workbench.action.chat.open', {
-				query: prompt, isPartialQuery: false
-			});
-			output.appendLine('[Memory] Optimization prompt sent — agent will apply directly');
-			vscode.window.showInformationMessage('Memory optimization started — agent will rewrite memories.md directly.');
-		} catch {
-			await vscode.env.clipboard.writeText(prompt);
-			vscode.window.showInformationMessage('Prompt copied — paste in Chat to optimize memories.');
-		}
+		await sendToChat(prompt, {
+			freshContext: true,
+			fallbackMessage: 'Prompt copied — paste in Chat to optimize memories.',
+		});
+		output.appendLine('[Memory] Optimization prompt sent — agent will apply directly');
+		vscode.window.showInformationMessage('Memory optimization started — agent will rewrite memories.md directly.');
 	} else {
 		// Review mode — show prompt in chat for user to confirm
-		try {
-			await vscode.commands.executeCommand('workbench.action.chat.newChat');
-			await sleep(400);
-			await vscode.commands.executeCommand('workbench.action.chat.open', {
-				query: prompt + '\n\n> ⚠️ Review the proposed changes before confirming. Only write the file if you are happy with the result.',
-				isPartialQuery: false
-			});
-			output.appendLine('[Memory] Optimization prompt sent for review');
-			vscode.window.showInformationMessage('Review the optimization in Chat. Confirm to apply or discard.');
-		} catch {
-			await vscode.env.clipboard.writeText(prompt);
-			vscode.window.showInformationMessage('Prompt copied — paste in Chat to review optimization.');
-		}
+		await sendToChat(prompt + '\n\n> ⚠️ Review the proposed changes before confirming. Only write the file if you are happy with the result.', {
+			freshContext: true,
+			fallbackMessage: 'Prompt copied — paste in Chat to review optimization.',
+		});
+		output.appendLine('[Memory] Optimization prompt sent for review');
+		vscode.window.showInformationMessage('Review the optimization in Chat. Confirm to apply or discard.');
 	}
 
 }

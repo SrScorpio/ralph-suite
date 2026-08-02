@@ -18,6 +18,7 @@ import {
 	buildSeguridadMd,
 	buildDecisionesMd,
 } from '../agentsMdBuilders';
+import { sendToChat } from '../chatLauncher';
 
 // ── Init project ─────────────────────────────────────────────────────────────
 
@@ -71,17 +72,12 @@ export async function initProject(root: string, output: vscode.OutputChannel): P
 	const prompt = buildInitPrompt(goal, root);
 	output.appendLine(`[Ralph] Init prompt: ${prompt.length} chars`);
 
-	try {
-		await vscode.commands.executeCommand('workbench.action.chat.open', {
-			query: prompt, isPartialQuery: false
-		});
-		output.appendLine('[Ralph] Chat opened');
-	} catch (e) {
-		output.appendLine(`[Ralph] Chat failed: ${e} — copying to clipboard`);
-		await vscode.env.clipboard.writeText(prompt);
-		vscode.window.showInformationMessage('Prompt copied to clipboard — paste in Chat.');
+	const sent = await sendToChat(prompt);
+	if (!sent) {
+		output.appendLine('[Ralph] Chat unavailable — prompt copied to clipboard');
 		return;
 	}
+	output.appendLine('[Ralph] Chat opened');
 
 	vscode.window.showInformationMessage('Chat opened. When prd.json is created, open the board.');
 

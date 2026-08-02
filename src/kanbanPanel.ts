@@ -7,6 +7,7 @@ import { getShellHtml, getBoardContent, BoardConfig } from './webview/kanbanHtml
 import { buildPushPrompt, buildSyncPrompt } from './kanban/gitHubSync';
 import { buildContextRefreshPrompt } from './kanban/contextRefresh';
 import { importPlanToPrd, generateNextId, buildAddFromChatPrompt } from './kanban/planImport';
+import { sendToChat } from './chatLauncher';
 
 export class KanbanPanel {
 	public static readonly viewType = 'ralph-suite.kanban';
@@ -128,7 +129,7 @@ export class KanbanPanel {
 
 			// Load shell HTML only once — subsequent renders use postMessage
 			if (!this.shellLoaded) {
-				this.panel.webview.html = getShellHtml();
+				this.panel.webview.html = getShellHtml(getNonce());
 				this.shellLoaded = true;
 				// Small delay to let the shell initialize before sending data
 				setTimeout(() => this.sendUpdate(prd, memories, logs, cfg), 100);
@@ -383,14 +384,9 @@ export class KanbanPanel {
 					break;
 				}
 				const prompt = buildPushPrompt(prd, pending);
-				try {
-					await vscode.commands.executeCommand('workbench.action.chat.open', {
-						query: prompt, isPartialQuery: false
-					});
-				} catch {
-					await vscode.env.clipboard.writeText(prompt);
-					vscode.window.showInformationMessage('Prompt copied — paste in Copilot Chat.');
-				}
+				await sendToChat(prompt, {
+					fallbackMessage: 'Prompt copied — paste in Copilot Chat.',
+				});
 				KanbanPanel.output?.appendLine(`[GitHub] Push prompt sent for ${pending.length} issues`);
 				break;
 			}
@@ -399,14 +395,9 @@ export class KanbanPanel {
 				const prd2 = PrdManager.load(this.root, this.prdPathSetting());
 				if (!prd2) { vscode.window.showErrorMessage('No prd.json found.'); break; }
 				const prompt2 = buildSyncPrompt(prd2, this.root);
-				try {
-					await vscode.commands.executeCommand('workbench.action.chat.open', {
-						query: prompt2, isPartialQuery: false
-					});
-				} catch {
-					await vscode.env.clipboard.writeText(prompt2);
-					vscode.window.showInformationMessage('Prompt copied — paste in Copilot Chat.');
-				}
+				await sendToChat(prompt2, {
+					fallbackMessage: 'Prompt copied — paste in Copilot Chat.',
+				});
 				KanbanPanel.output?.appendLine('[GitHub] Sync prompt sent');
 				break;
 			}
@@ -494,14 +485,9 @@ export class KanbanPanel {
 				const prd2    = PrdManager.load(this.root, this.prdPathSetting());
 				const prdPath2 = PrdManager.prdPath(this.root, this.prdPathSetting());
 				const prompt  = buildAddFromChatPrompt(prd2, prdPath2);
-				try {
-					await vscode.commands.executeCommand('workbench.action.chat.open', {
-						query: prompt, isPartialQuery: false
-					});
-				} catch {
-					await vscode.env.clipboard.writeText(prompt);
-					vscode.window.showInformationMessage('Prompt copied — paste in Copilot Chat.');
-				}
+				await sendToChat(prompt, {
+					fallbackMessage: 'Prompt copied — paste in Chat.',
+				});
 				break;
 			}
 
@@ -623,14 +609,9 @@ export class KanbanPanel {
 				const taskCR = prdCR.issues.find(i => i.id === taskId);
 				if (!taskCR) { vscode.window.showErrorMessage(`Task ${taskId} not found.`); break; }
 				const prompt = buildContextRefreshPrompt(this.root, taskCR, prdCR);
-				try {
-						await vscode.commands.executeCommand('workbench.action.chat.open', {
-							query: prompt, isPartialQuery: false
-						});
-				} catch {
-					await vscode.env.clipboard.writeText(prompt);
-					vscode.window.showInformationMessage('Context refresh prompt copied — paste in Copilot Chat.');
-				}
+				await sendToChat(prompt, {
+					fallbackMessage: 'Context refresh prompt copied — paste in Copilot Chat.',
+				});
 				KanbanPanel.output?.appendLine(`[Board] Context refresh prompt sent for ${taskId}`);
 				break;
 			}
@@ -686,3 +667,13 @@ function cleanIssueFields(raw: any): Partial<Issue> {
 // ── Plan import / ID generator / Add from Chat (extracted to kanban/planImport.ts) ─
 
 // ── Context Refresh prompt (extracted to kanban/contextRefresh.ts) ──────────
+
+// ── Nonce generator for webview CSP ─────────────────────────────────────────
+function getNonce(): string {
+	let text = '';
+	const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+	for (let i = 0; i < 32; i++) {
+		text += possible.charAt(Math.floor(Math.random() * possible.length));
+	}
+	return text;
+}

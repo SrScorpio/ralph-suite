@@ -7,7 +7,7 @@ function getExtensionVersion(): string {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-	const output = vscode.window.createOutputChannel('Ralph Suite');
+	const output = vscode.window.createOutputChannel('Ralph Suite', { log: true });
 	context.subscriptions.push(output);
 	output.appendLine(`[Ralph] ===== ACTIVATING v${getExtensionVersion()} =====`);
 

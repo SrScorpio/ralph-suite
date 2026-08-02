@@ -4,14 +4,24 @@ All notable changes to Ralph Suite are documented here.
 
 ---
 
-## [Unreleased]
+## [1.8.0] - 2026-08-02
 
 ### Changed
 - **Upgrade de engine de VS Code** — `engines.vscode` subido de `^1.90.0` a `^1.103.0` (julio 2025) para alinear con versiones recientes
 - **`@types/vscode`** actualizado a `^1.103.0`
+- **`LogOutputChannel`** — migrado `createOutputChannel` a `{ log: true }` para logging estructurado con niveles y marcas de tiempo
+- **`chatLauncher.ts`** — nuevo módulo centralizado para invocar el Chat de VS Code. Centraliza el patrón `newChat + open + clipboard fallback` que estaba duplicado en 8 sitios (`task.ts`, `memory.ts`, `project.ts`, `kanbanPanel.ts`). Si el comando interno cambia en el futuro, solo se actualiza un archivo
 
 ### Security
-- **Content Security Policy en el webview** — añadida CSP estricta en `getShellHtml()` que restringe recursos externos (`default-src 'none'`, límites en `img-src`/`font-src`). Mantiene `'unsafe-inline'` para scripts/estilos temporalmente mientras se completa el refactor de handlers inline documentado en `plans/seguridad.md`.
+- **CSP estricta con nonce** en el webview (`getShellHtml(nonce)`) — `script-src 'nonce-<nonce>'` (sin `'unsafe-inline'`), restringe recursos externos (`default-src 'none'`), `style-src 'unsafe-inline'` temporalmente
+- **Eliminados los 31 handlers inline** del webview (`onclick`, `ondragstart`, `ondragover`, `ondrop`, etc.) — sustituidos por **event delegation** mediante atributos `data-action` / `data-id` / `data-close` y listeners `addEventListener` en `document`
+- **Drag & Drop refactorizado** a delegación de eventos con `closest()` — ya no requiere re-binding tras cada `innerHTML`
+- **Nonce generator** añadido en `kanbanPanel.ts` (`getNonce()`) e inyectado en CSP y etiqueta `<script>`
+
+### Verified
+- Compilación TypeScript sin errores
+- 51 tests unitarios pasando (sanitización, PRD, memoria, context refresh)
+- Empaquetado `vsce package` correcto (VSIX 69 KB, 26 archivos)
 
 ---
 

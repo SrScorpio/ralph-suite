@@ -7,6 +7,7 @@
 import * as vscode from 'vscode';
 import { RalphStateManager } from '../stateManager';
 import { KanbanPanel } from '../kanbanPanel';
+import { sendToChat } from '../chatLauncher';
 
 // ── Sleep utility ────────────────────────────────────────────────────────────
 
@@ -28,14 +29,12 @@ export async function runTaskWithRetry(
 			output.appendLine(`[Ralph] Retry ${attempt}/${retries + 1} for ${task.id}`);
 		}
 		try {
-			if (freshContext) {
-				await vscode.commands.executeCommand('workbench.action.chat.newChat');
-				await sleep(400);
-			}
-			await vscode.commands.executeCommand('workbench.action.chat.open', { query: prompt, isPartialQuery: false });
+			await sendToChat(prompt, {
+				freshContext,
+				fallbackMessage: 'Prompt copied — paste in Chat.',
+			});
 		} catch {
-			await vscode.env.clipboard.writeText(prompt);
-			vscode.window.showInformationMessage('Prompt copied — paste in Chat.');
+			// sendToChat already handles the clipboard fallback
 			return;
 		}
 

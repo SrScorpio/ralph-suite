@@ -30,7 +30,7 @@ Estado actual de webview
 - `webview/kanbanHtml.ts` escapa contenido dinámico con helpers separados para HTML, atributos y argumentos JS.
 - El contenido de `prd.json`, logs, memoria, labels, dependencias y criterios no debe renderizarse sin escape.
 - Los mensajes recibidos desde webview pasan por allowlist de `id`, `status`, `priority`, arrays y campos editables en `kanbanPanel.ts`.
-- Deuda pendiente: sustituir `innerHTML`/handlers inline por DOM APIs o listeners declarativos y activar CSP estricta con nonce.
+- Deuda resuelta (2026-08): CSP estricta con nonce activada en `getShellHtml(nonce)`; handlers inline sustituidos por event delegation (`data-action`/`data-close` + `addEventListener`); el contenido del board sigue renderizándose vía `innerHTML` con escape (`esc`/`escAttr`) pero ya no contiene código ejecutable inline.
 
 Operaciones en el sistema de archivos
 - Antes de borrar o sobrescribir ficheros, mostrar confirmación clara.
@@ -62,7 +62,7 @@ Incidentes
 - Documentar en `plans/decisiones.md` y en `.agent/memories.md` cualquier incidente de seguridad y las acciones tomadas.
 
 Deuda prioritaria
-- CSP estricta con nonce.
-- Eliminar `innerHTML` para datos no confiables o encapsular render en plantillas DOM seguras.
-- Sustituir handlers inline (`onclick`, drag handlers inline) por `addEventListener`.
+- ✅ CSP estricta con nonce (resuelto 2026-08).
+- Eliminar `innerHTML` para datos no confiables o encapsular render en plantillas DOM seguras — el contenido se escapa con `esc`/`escAttr`, pero sigue usándose `innerHTML` para inyectar el board renderizado. Pendiente migrar a DOM APIs si se quiere eliminar `innerHTML` por completo.
+- ✅ Sustituir handlers inline (`onclick`, drag handlers inline) por `addEventListener` (resuelto 2026-08: event delegation con `data-*`).
 - Añadir validación de esquema formal para `prd.json` cuando se acepte una dependencia de schema validator o se implemente validador local completo.

@@ -17,13 +17,13 @@ export interface BoardConfig {
 
 // ── Shell HTML — loaded ONCE, never replaced ──────────────────────────────────
 
-export function getShellHtml(): string {
+export function getShellHtml(nonce: string): string {
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https:; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https:; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; font-src data:;">
 <title>Ralph Board</title>
 <style>
 :root {
@@ -166,7 +166,7 @@ summary:hover{color:var(--text)}
 <div class="drag-ghost" id="dragGhost"></div>
 
 <!-- Add Issue Modal -->
-<div class="modal-overlay" id="addModal" style="display:none" onclick="if(event.target===this)closeAddModal()">
+<div class="modal-overlay" id="addModal" style="display:none" data-close="addModal">
   <div class="modal">
     <div class="modal-title">＋ New Issue</div>
     <div class="modal-row"><label class="modal-label">Title *</label><input class="modal-input" id="mi-title" placeholder="Short descriptive title"/></div>
@@ -177,12 +177,12 @@ summary:hover{color:var(--text)}
     </div>
     <div class="modal-row"><label class="modal-label">Acceptance Criteria (one per line)</label><textarea class="modal-textarea" id="mi-criteria"></textarea></div>
     <div class="modal-row"><label class="modal-label">Labels (comma-separated)</label><input class="modal-input" id="mi-labels"/></div>
-    <div class="modal-footer"><button class="btn" onclick="closeAddModal()">Cancel</button><button class="btn btn-run" onclick="submitAddIssue()">Add Issue</button></div>
+    <div class="modal-footer"><button class="btn" data-action="cancelAdd">Cancel</button><button class="btn btn-run" data-action="submitAdd">Add Issue</button></div>
   </div>
 </div>
 
 <!-- Edit Issue Modal -->
-<div class="modal-overlay" id="editModal" style="display:none" onclick="if(event.target===this)closeEditModal()">
+<div class="modal-overlay" id="editModal" style="display:none" data-close="editModal">
   <div class="modal" style="width:480px">
     <div class="modal-title">✎ Edit Issue</div>
     <input type="hidden" id="em-id"/>
@@ -197,11 +197,11 @@ summary:hover{color:var(--text)}
       <div class="modal-row"><label class="modal-label">Labels (comma-separated)</label><input class="modal-input" id="em-labels"/></div>
       <div class="modal-row"><label class="modal-label">Dependencies (comma-separated IDs)</label><input class="modal-input" id="em-deps"/></div>
     </div>
-    <div class="modal-footer"><button class="btn" onclick="closeEditModal()">Cancel</button><button class="btn btn-run" onclick="submitEditIssue()">Save</button></div>
+    <div class="modal-footer"><button class="btn" data-action="cancelEdit">Cancel</button><button class="btn btn-run" data-action="submitEdit">Save</button></div>
   </div>
 </div>
 
-<script>
+<script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 function send(type, id) { vscode.postMessage({ type, id }); }
 
@@ -273,6 +273,35 @@ function submitEditIssue() {
   closeEditModal();
 }
 
+// ── Click delegation (data-action / data-close) ───────────────────────────────
+document.addEventListener('click', e => {
+  // Modal overlay click-to-close (only when clicking the overlay itself)
+  const overlay = e.target.closest('[data-close]');
+  if (overlay && e.target === overlay) {
+    const el = document.getElementById(overlay.dataset.close);
+    if (el) { el.style.display = 'none'; }
+    return;
+  }
+  const el = e.target.closest('[data-action]');
+  if (!el) { return; }
+  const action = el.dataset.action;
+  const id = el.dataset.id;
+  switch (action) {
+    case 'runTask': case 'contextRefresh': case 'markDone': case 'addNote': case 'resetTask':
+    case 'showEditIssue': case 'setView':
+      send(action, id); break;
+    case 'startRunner': case 'stopRunner': case 'pushToGitHub': case 'syncFromGitHub':
+    case 'showAddIssue': case 'addFromChat': case 'openPrd': case 'openMemories':
+    case 'optimizeMemory': case 'importPlan': case 'setupProject': case 'openSettings':
+    case 'refresh': case 'initProject':
+      send(action); break;
+    case 'cancelAdd':  closeAddModal(); break;
+    case 'submitAdd':  submitAddIssue(); break;
+    case 'cancelEdit': closeEditModal(); break;
+    case 'submitEdit': submitEditIssue(); break;
+  }
+});
+
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
   const addOpen  = document.getElementById('addModal').style.display  !== 'none';
@@ -284,50 +313,65 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// ── Drag & Drop ───────────────────────────────────────────────────────────────
+// ── Drag & Drop (delegated via closest) ───────────────────────────────────────
 let dragId = null, dragEl = null, dragSourceCol = null;
 const ghost = document.getElementById('dragGhost');
-function onDragStart(e) {
-  dragEl = e.currentTarget; dragId = dragEl.dataset.id;
-  dragSourceCol = dragEl.closest('.col')?.dataset.col ?? null;
-  dragEl.classList.add('dragging');
-  ghost.textContent = dragEl.querySelector('.card-id').textContent + '  ' + dragEl.querySelector('.card-title').textContent.slice(0,30);
+
+document.addEventListener('dragstart', e => {
+  const cardEl = e.target.closest('.card');
+  if (!cardEl) { return; }
+  dragEl = cardEl; dragId = cardEl.dataset.id;
+  dragSourceCol = cardEl.closest('.col')?.dataset.col ?? null;
+  cardEl.classList.add('dragging');
+  ghost.textContent = cardEl.querySelector('.card-id').textContent + '  ' + cardEl.querySelector('.card-title').textContent.slice(0,30);
   e.dataTransfer.setDragImage(ghost, 0, 0);
   e.dataTransfer.effectAllowed = 'move';
-}
-function onDragEnd(e) {
-  dragEl?.classList.remove('dragging');
-  document.querySelectorAll('.card.drop-above,.card.drop-below').forEach(c=>c.classList.remove('drop-above','drop-below'));
+});
+document.addEventListener('dragend', () => {
+  if (dragEl) { dragEl.classList.remove('dragging'); }
+  document.querySelectorAll('.card.drop-above,.card.drop-below,.col.drag-over').forEach(c=>c.classList.remove('drop-above','drop-below','drag-over'));
   dragEl = null; dragId = null; dragSourceCol = null;
-  document.querySelectorAll('.col').forEach(c=>c.classList.remove('drag-over'));
-}
-function onDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect='move'; }
-function onDragEnter(e) { document.querySelectorAll('.col').forEach(c=>c.classList.remove('drag-over')); e.currentTarget.classList.add('drag-over'); }
-function onDragLeave(e) { if(!e.currentTarget.contains(e.relatedTarget)){ e.currentTarget.classList.remove('drag-over'); } }
-function onDrop(e) {
+});
+document.addEventListener('dragover', e => {
+  const col = e.target.closest('.col');
+  const cardEl = e.target.closest('.card');
+  if (!col && !cardEl) { return; }
   e.preventDefault();
-  const col = e.currentTarget; const newStatus = col.dataset.col;
-  col.classList.remove('drag-over');
-  if (!dragId || !newStatus) { return; }
-  if (dragEl?.dataset.status !== newStatus) { vscode.postMessage({ type:'moveCard', id:dragId, status:newStatus }); }
-}
-function onCardDragOver(e) {
-  e.preventDefault(); e.stopPropagation();
-  const target = e.currentTarget;
-  if (!dragEl || target === dragEl) { return; }
-  if (target.closest('.col')?.dataset.col !== dragSourceCol) { return; }
+  if (e.dataTransfer) { e.dataTransfer.dropEffect = 'move'; }
+  if (col) {
+    document.querySelectorAll('.col').forEach(c=>c.classList.remove('drag-over'));
+    col.classList.add('drag-over');
+  }
   document.querySelectorAll('.card.drop-above,.card.drop-below').forEach(c=>c.classList.remove('drop-above','drop-below'));
-  const rect = target.getBoundingClientRect();
-  target.classList.add(e.clientY < rect.top + rect.height/2 ? 'drop-above' : 'drop-below');
-}
-function onCardDrop(e) {
-  e.preventDefault(); e.stopPropagation();
-  const target = e.currentTarget;
-  if (!dragEl || target === dragEl) { return; }
-  if (target.closest('.col')?.dataset.col !== dragSourceCol) { return; }
-  const rect = target.getBoundingClientRect();
-  vscode.postMessage({ type:'reorderCard', id:dragId, targetId:target.dataset.id, before: e.clientY < rect.top + rect.height/2 });
-}
+  if (cardEl && dragEl && cardEl !== dragEl && cardEl.closest('.col')?.dataset.col === dragSourceCol) {
+    const rect = cardEl.getBoundingClientRect();
+    cardEl.classList.add(e.clientY < rect.top + rect.height/2 ? 'drop-above' : 'drop-below');
+  }
+});
+document.addEventListener('dragleave', e => {
+  const col = e.target.closest('.col');
+  if (col && !col.contains(e.relatedTarget)) { col.classList.remove('drag-over'); }
+});
+document.addEventListener('drop', e => {
+  const cardEl = e.target.closest('.card');
+  // Reorder within the same column
+  if (cardEl && dragEl && cardEl !== dragEl && cardEl.closest('.col')?.dataset.col === dragSourceCol) {
+    e.preventDefault();
+    const rect = cardEl.getBoundingClientRect();
+    vscode.postMessage({ type: 'reorderCard', id: dragId, targetId: cardEl.dataset.id, before: e.clientY < rect.top + rect.height/2 });
+    return;
+  }
+  // Move to a column (drop on column or on a card in a different column)
+  const col = e.target.closest('.col');
+  if (col) {
+    e.preventDefault();
+    col.classList.remove('drag-over');
+    const newStatus = col.dataset.col;
+    if (dragId && newStatus && dragEl?.dataset.status !== newStatus) {
+      vscode.postMessage({ type: 'moveCard', id: dragId, status: newStatus });
+    }
+  }
+});
 </script>
 </body>
 </html>`;
@@ -379,7 +423,6 @@ function card(issue: Issue, log: TaskLog | null): string {
 	const labels = (issue.labels ?? []).map(l => `<span class="card-label">${esc(l)}</span>`).join('');
 	const idAttr = escAttr(issue.id);
 	const statusAttr = escAttr(issue.status);
-	const idJs = escJsArg(issue.id);
 
 	let logBadge = '';
 	if (log?.status === 'completed' && log.durationMin !== undefined) {
@@ -395,19 +438,17 @@ function card(issue: Issue, log: TaskLog | null): string {
 	const criteriaTooltip = criteriaCount > 0 ? issue.acceptanceCriteria.map((ac,i) => `${i+1}. ${ac}`).join('\n') : '';
 
 	let actions = '';
-	if (issue.status === 'todo')        { actions = `<button class="btn btn-run" onclick="send(&quot;runTask&quot;,${idJs})">▶ Run</button>`; }
+	if (issue.status === 'todo')        { actions = `<button class="btn btn-run" data-action="runTask" data-id="${idAttr}">▶ Run</button>`; }
 	else if (issue.status === 'blocked'){ actions = `<button class="btn btn-disabled" disabled>⛓ Blocked</button>`; }
-	else if (issue.status === 'inprogress') { actions = `<button class="btn btn-run" onclick="send(&quot;contextRefresh&quot;,${idJs})" title="Send context recovery prompt to chat">🔄 Refresh</button><button class="btn btn-done" onclick="send(&quot;markDone&quot;,${idJs})">✓ Mark done</button>`; }
-	else { actions = `<button class="btn btn-note" onclick="send(&quot;addNote&quot;,${idJs})" title="Add note">✎</button><button class="btn btn-reset" onclick="send(&quot;resetTask&quot;,${idJs})">↩ Reset</button>`; }
+	else if (issue.status === 'inprogress') { actions = `<button class="btn btn-run" data-action="contextRefresh" data-id="${idAttr}" title="Send context recovery prompt to chat">🔄 Refresh</button><button class="btn btn-done" data-action="markDone" data-id="${idAttr}">✓ Mark done</button>`; }
+	else { actions = `<button class="btn btn-note" data-action="addNote" data-id="${idAttr}" title="Add note">✎</button><button class="btn btn-reset" data-action="resetTask" data-id="${idAttr}">↩ Reset</button>`; }
 
-	return `<div class="card" draggable="true" data-id="${idAttr}" data-status="${statusAttr}"
-     ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"
-     ondragover="onCardDragOver(event)" ondrop="onCardDrop(event)">
+	return `<div class="card" draggable="true" data-id="${idAttr}" data-status="${statusAttr}">
   <div class="card-header">
     <div class="card-header-left"><span class="card-id">${esc(issue.id)}</span>${epic}${labels}</div>
     <div class="card-header-right"><span class="priority-dot" style="background:${pc}" title="${pl}"></span>${logBadge}</div>
   </div>
-  <div class="card-title" onclick="send(&quot;showEditIssue&quot;,${idJs})" title="Click to edit">${esc(issue.title)}</div>
+  <div class="card-title" data-action="showEditIssue" data-id="${idAttr}" title="Click to edit">${esc(issue.title)}</div>
   ${issue.description ? `<div class="card-desc">${esc(issue.description.slice(0,100))}${issue.description.length>100?'…':''}</div>` : ''}
   ${noteHtml}${deps}
   <div class="card-footer">
@@ -429,9 +470,7 @@ function boardView(prd: Prd, logs: Record<string, TaskLog>, autoRun: boolean): s
 	return `<div class="board">${cols.map(col => {
 		const issues = prd.issues.filter(i => i.status === col.key);
 		const cards  = issues.map(i => card(i, logs[i.id] ?? null)).join('');
-		return `<div class="col" data-col="${col.key}"
-      ondragover="onDragOver(event)" ondragenter="onDragEnter(event)"
-      ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+		return `<div class="col" data-col="${col.key}">
   <div class="col-header">
     <span class="col-title" style="color:${col.color}">${col.label}</span>
     <span class="col-count">${issues.length}</span>
@@ -475,10 +514,10 @@ function statsBar(prd: Prd, cfg: BoardConfig): string {
 	const pct     = stats.total ? Math.round((stats.completed/stats.total)*100) : 0;
 	const epics   = [...new Set(prd.issues.map(i=>i.epic).filter(Boolean))];
 	const views   = [['board','⊞ Board'],['epic','⬡ Epic'],['history','📋 History']] as const;
-	const viewBtns = views.map(([v,l]) => `<button class="btn btn-sm ${cfg.view===v?'btn-view-active':''}" onclick="send('setView','${v}')">${l}</button>`).join('');
+	const viewBtns = views.map(([v,l]) => `<button class="btn btn-sm ${cfg.view===v?'btn-view-active':''}" data-action="setView" data-id="${escAttr(v)}">${l}</button>`).join('');
 	const runnerBtn = cfg.autoRun
-		? `<button class="btn btn-sm btn-runner-on" onclick="send('stopRunner')">⏹ Stop</button>`
-		: `<button class="btn btn-sm btn-runner-off" onclick="send('startRunner')">⚡ Auto-run</button>`;
+		? `<button class="btn btn-sm btn-runner-on" data-action="stopRunner">⏹ Stop</button>`
+		: `<button class="btn btn-sm btn-runner-off" data-action="startRunner">⚡ Auto-run</button>`;
 
 	return `<div class="stats-bar">
   <div class="stats-top">
@@ -491,17 +530,17 @@ function statsBar(prd: Prd, cfg: BoardConfig): string {
   <div class="stats-actions">
     <div class="view-switcher">${viewBtns}</div>
     ${runnerBtn}
-    <button class="btn btn-sm btn-github" onclick="send('pushToGitHub')" title="Push to GitHub">⬆ GitHub</button>
-    <button class="btn btn-sm btn-github" onclick="send('syncFromGitHub')" title="Sync from GitHub">⬇ Sync</button>
-    <button class="btn btn-sm btn-add" onclick="send('showAddIssue')" title="Add new issue">＋ Issue</button>
-    <button class="btn btn-sm btn-add" onclick="send('addFromChat')" title="Add via Chat">＋ Chat</button>
-    <button class="btn btn-sm" onclick="send('openPrd')" title="Edit prd.json">📄 PRD</button>
-    <button class="btn btn-sm" onclick="send('openMemories')">🧠 Memory</button>
-    <button class="btn btn-sm btn-optimize" onclick="send('optimizeMemory')" title="Optimize memories.md — compress and remove duplicates">🧹 Optimize</button>
-    <button class="btn btn-sm" onclick="send('importPlan')" title="Import or append from Plan">⬇ Plan</button>
-    <button class="btn btn-sm btn-setup" onclick="send('setupProject')" title="Generate AGENTS.md and plans/">⚙ Agents</button>
-    <button class="btn btn-sm" onclick="send('openSettings')">⚙</button>
-    <button class="btn btn-sm" onclick="send('refresh')">↻</button>
+    <button class="btn btn-sm btn-github" data-action="pushToGitHub" title="Push to GitHub">⬆ GitHub</button>
+    <button class="btn btn-sm btn-github" data-action="syncFromGitHub" title="Sync from GitHub">⬇ Sync</button>
+    <button class="btn btn-sm btn-add" data-action="showAddIssue" title="Add new issue">＋ Issue</button>
+    <button class="btn btn-sm btn-add" data-action="addFromChat" title="Add via Chat">＋ Chat</button>
+    <button class="btn btn-sm" data-action="openPrd" title="Edit prd.json">📄 PRD</button>
+    <button class="btn btn-sm" data-action="openMemories">🧠 Memory</button>
+    <button class="btn btn-sm btn-optimize" data-action="optimizeMemory" title="Optimize memories.md — compress and remove duplicates">🧹 Optimize</button>
+    <button class="btn btn-sm" data-action="importPlan" title="Import or append from Plan">⬇ Plan</button>
+    <button class="btn btn-sm btn-setup" data-action="setupProject" title="Generate AGENTS.md and plans/">⚙ Agents</button>
+    <button class="btn btn-sm" data-action="openSettings">⚙</button>
+    <button class="btn btn-sm" data-action="refresh">↻</button>
   </div>
 </div>`;
 }
@@ -513,7 +552,7 @@ function guardrailsPanel(guardrails: string[], boundaries: string[]): string {
   <div class="guardrails-body">
     ${guardrails.length ? `<div class="guardrails-section"><div class="guardrails-label">Rules</div>${guardrails.map(g=>`<div class="guardrail-item">• ${esc(g)}</div>`).join('')}</div>` : ''}
     ${boundaries.length ? `<div class="guardrails-section"><div class="guardrails-label">Never touch</div>${boundaries.map(b=>`<div class="guardrail-item boundary-item">🚫 ${esc(b)}</div>`).join('')}</div>` : ''}
-    <button class="btn btn-sm" onclick="send('openSettings')" style="margin-top:6px">Edit in settings</button>
+    <button class="btn btn-sm" data-action="openSettings" style="margin-top:6px">Edit in settings</button>
   </div>
 </details>`;
 }
@@ -531,8 +570,8 @@ function emptyState(): string {
   <div class="empty-title">No prd.json found</div>
   <div class="empty-sub">Generate one from a project description or import a Plan.</div>
   <div style="display:flex;gap:8px;margin-top:8px">
-    <button class="btn btn-primary" onclick="send('initProject')">Init Project</button>
-    <button class="btn btn-primary" onclick="send('importPlan')" style="background:#1f6feb;border-color:#1f6feb">⬇ Import Plan</button>
+    <button class="btn btn-primary" data-action="initProject">Init Project</button>
+    <button class="btn btn-primary" data-action="importPlan" style="background:#1f6feb;border-color:#1f6feb">⬇ Import Plan</button>
   </div>
   <div class="empty-hint">Or place a <code>prd.json</code> in the workspace root</div>
 </div>`;
