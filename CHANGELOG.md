@@ -4,6 +4,14 @@ All notable changes to Ralph Suite are documented here.
 
 ---
 
+## [1.8.1] - 2026-08-02
+
+### Documented
+- **ADR-015** registrado en `plans/decisiones.md`: documenta formalmente la auditoría de settings de la v1.8.0, incluyendo investigación del historial de git, análisis de intención original de `autoRun` y `memoryOptimizeAutoApply`, decisión y consecuencias (riesgo para usuarios con esos settings en `settings.json`).
+- **CHANGELOG ampliado**: las entradas *Removed* de v1.8.0 ahora explican el *porqué* (investigación de historial, no solo el *qué* estático).
+
+---
+
 ## [1.8.0] - 2026-08-02
 
 ### Changed
