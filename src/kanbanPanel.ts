@@ -8,6 +8,9 @@ import { buildPushPrompt, buildSyncPrompt } from './kanban/gitHubSync';
 import { buildContextRefreshPrompt } from './kanban/contextRefresh';
 import { importPlanToPrd, generateNextId, buildAddFromChatPrompt } from './kanban/planImport';
 import { sendToChat } from './chatLauncher';
+import { safeMessageId, isBoardStatus, cleanText, cleanTextArray, cleanPriority, cleanIssueFields, getNonce } from './boardSanitizers';
+import { computeHealthScore } from './healthScore';
+import { detectLocale } from './i18n';
 
 export class KanbanPanel {
 	public static readonly viewType = 'ralph-suite.kanban';
@@ -129,7 +132,7 @@ export class KanbanPanel {
 
 			// Load shell HTML only once — subsequent renders use postMessage
 			if (!this.shellLoaded) {
-				this.panel.webview.html = getShellHtml(getNonce());
+				this.panel.webview.html = getShellHtml(getNonce(), detectLocale());
 				this.shellLoaded = true;
 				// Small delay to let the shell initialize before sending data
 				setTimeout(() => this.sendUpdate(prd, memories, logs, cfg), 100);
@@ -149,7 +152,8 @@ export class KanbanPanel {
 	private sendUpdate(prd: any, memories: string | null, logs: any, cfg: BoardConfig) {
 		if (this.disposed) { return; }
 		try {
-			const html = getBoardContent(prd, memories, logs, cfg);
+			const statuses = RalphStateManager.getAllStatuses(this.root);
+			const html = getBoardContent(prd, memories, logs, cfg, statuses);
 			this.panel.webview.postMessage({ type: 'update', data: { html } });
 		} catch (e: any) {
 			if (e?.message?.includes('disposed')) {
@@ -161,12 +165,22 @@ export class KanbanPanel {
 
 	private getBoardConfig(): BoardConfig {
 		const s = vscode.workspace.getConfiguration('ralph-suite');
+		// Compute health score (ADR-005) from current prd + statuses + logs
+		const prd = PrdManager.load(this.root, this.prdPathSetting());
+		let health;
+		if (prd) {
+			const statuses = RalphStateManager.getAllStatuses(this.root);
+			const logs = RalphStateManager.getAllLogs(this.root);
+			health = computeHealthScore(prd, statuses, logs);
+		}
 		return {
 			autoRun:    this.autoRun,
 			maxLoops:   s.get<number>('maxLoops', 5),
 			guardrails: s.get<string[]>('guardrails', []),
 			boundaries: s.get<string[]>('boundaries', []),
 			view:       this.currentView,
+			health,
+			locale:     detectLocale(),
 		};
 	}
 
@@ -627,57 +641,10 @@ export class KanbanPanel {
 	}
 }
 
-function safeMessageId(raw: unknown): string | null {
-	if (typeof raw !== 'string') { return null; }
-	const id = safeTaskId(raw);
-	return id === raw.trim() && id !== 'UNKNOWN' ? id : null;
-}
-
-function isBoardStatus(raw: unknown): raw is Issue['status'] {
-	return raw === 'todo' || raw === 'inprogress' || raw === 'completed' || raw === 'blocked';
-}
-
-function cleanText(raw: unknown, max = 1000): string {
-	return typeof raw === 'string' ? raw.trim().slice(0, max) : '';
-}
-
-function cleanTextArray(raw: unknown, maxItems = 100): string[] {
-	if (!Array.isArray(raw)) { return []; }
-	return raw
-		.filter((v): v is string => typeof v === 'string')
-		.map(v => v.trim())
-		.filter(Boolean)
-		.slice(0, maxItems);
-}
-
-function cleanPriority(raw: unknown): Issue['priority'] {
-	return raw === 'P0' || raw === 'P1' || raw === 'P2' || raw === 'P3' ? raw : 'P2';
-}
-
-function cleanIssueFields(raw: any): Partial<Issue> {
-	return {
-		title:              cleanText(raw?.title, 240),
-		description:        cleanText(raw?.description, 4000),
-		epic:               cleanText(raw?.epic, 120) || undefined,
-		priority:           cleanPriority(raw?.priority),
-		acceptanceCriteria: cleanTextArray(raw?.acceptanceCriteria),
-		labels:             cleanTextArray(raw?.labels).map(l => l.slice(0, 80)),
-		dependencies:       cleanTextArray(raw?.dependencies).map(safeTaskId),
-	};
-}
-
 // ── GitHub prompt builders (extracted to kanban/gitHubSync.ts) ──────────────
 
 // ── Plan import / ID generator / Add from Chat (extracted to kanban/planImport.ts) ─
 
 // ── Context Refresh prompt (extracted to kanban/contextRefresh.ts) ──────────
 
-// ── Nonce generator for webview CSP ─────────────────────────────────────────
-function getNonce(): string {
-	let text = '';
-	const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-	for (let i = 0; i < 32; i++) {
-		text += possible.charAt(Math.floor(Math.random() * possible.length));
-	}
-	return text;
-}
+// ── Board sanitizers + nonce (extracted to boardSanitizers.ts) ───────────────

@@ -1,25 +1,32 @@
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types (re-used from prdManager / stateManager to avoid duplication) ───────
 
-export interface Issue {
-	id: string; title: string; description: string; epic?: string;
-	priority: 'P0'|'P1'|'P2'|'P3'; status: 'todo'|'inprogress'|'completed'|'blocked';
-	acceptanceCriteria: string[]; dependencies: string[]; labels: string[];
-}
-export interface Prd { project: string; description: string; version: string; issues: Issue[]; }
-export interface TaskLog {
-	id: string; title: string; status: string; startedAt: string;
-	completedAt?: string; durationMin?: number; note?: string; summary?: string;
-}
+import { Issue, Prd } from '../prdManager';
+import { TaskLog } from '../stateManager';
+import { HealthScore } from '../healthScore';
+import { buildDependencySvg } from '../kanban/dependencyGraph';
+import { Locale, t } from '../i18n';
 export interface BoardConfig {
 	autoRun: boolean; maxLoops: number; guardrails: string[]; boundaries: string[];
 	view: 'board'|'epic'|'history';
+	health?: HealthScore;
+	locale?: Locale;
 }
 
 // ── Shell HTML — loaded ONCE, never replaced ──────────────────────────────────
 
-export function getShellHtml(nonce: string): string {
+export function getShellHtml(nonce: string, locale: Locale = 'en'): string {
+	const s = t(locale);
+	const ph = locale === 'es' ? {
+		titlePh: 'Título descriptivo corto',
+		descPh: '¿Qué hay que hacer?',
+		epicPh: 'ej. Auth, Backend…',
+	} : {
+		titlePh: 'Short descriptive title',
+		descPh: 'What needs to be done?',
+		epicPh: 'e.g. Auth, Backend…',
+	};
 	return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${locale}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -122,6 +129,11 @@ code{background:var(--bg3);padding:1px 5px;border-radius:3px;font-family:var(--m
 .epic-chip{font-size:10px;background:rgba(137,87,229,.15);color:var(--purple);padding:1px 7px;border-radius:10px}
 .stats-actions{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
 .view-switcher{display:flex;gap:2px;background:var(--bg3);border-radius:5px;padding:2px}
+/* Health score */
+.health-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px}
+.health-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.health-tooltip{position:relative;cursor:help;text-decoration:underline dotted;text-underline-offset:2px}
+.health-tooltip:hover::after{content:attr(data-tooltip);position:absolute;bottom:calc(100% + 6px);right:0;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:11px;color:var(--text);line-height:1.5;white-space:pre-wrap;min-width:180px;z-index:50;box-shadow:0 4px 16px rgba(0,0,0,.3);pointer-events:none}
 /* Epic view */
 .epic-group{margin:10px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)}
 .epic-group-header{padding:8px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
@@ -168,36 +180,36 @@ summary:hover{color:var(--text)}
 <!-- Add Issue Modal -->
 <div class="modal-overlay" id="addModal" style="display:none" data-close="addModal">
   <div class="modal">
-    <div class="modal-title">＋ New Issue</div>
-    <div class="modal-row"><label class="modal-label">Title *</label><input class="modal-input" id="mi-title" placeholder="Short descriptive title"/></div>
-    <div class="modal-row"><label class="modal-label">Description</label><textarea class="modal-textarea" id="mi-desc" placeholder="What needs to be done?"></textarea></div>
+    <div class="modal-title">${s.newIssue}</div>
+    <div class="modal-row"><label class="modal-label">${s.title} *</label><input class="modal-input" id="mi-title" placeholder="${ph.titlePh}"/></div>
+    <div class="modal-row"><label class="modal-label">${s.description}</label><textarea class="modal-textarea" id="mi-desc" placeholder="${ph.descPh}"></textarea></div>
     <div class="modal-row-2">
-      <div class="modal-row"><label class="modal-label">Epic</label><input class="modal-input" id="mi-epic" placeholder="e.g. Auth, Backend…"/></div>
-      <div class="modal-row"><label class="modal-label">Priority</label><select class="modal-select" id="mi-priority"><option value="P0">🔴 P0</option><option value="P1">🟠 P1</option><option value="P2" selected>🔵 P2</option><option value="P3">⚪ P3</option></select></div>
+      <div class="modal-row"><label class="modal-label">${s.epicLabel}</label><input class="modal-input" id="mi-epic" placeholder="${ph.epicPh}"/></div>
+      <div class="modal-row"><label class="modal-label">${s.priority}</label><select class="modal-select" id="mi-priority"><option value="P0">🔴 P0</option><option value="P1">🟠 P1</option><option value="P2" selected>🔵 P2</option><option value="P3">⚪ P3</option></select></div>
     </div>
-    <div class="modal-row"><label class="modal-label">Acceptance Criteria (one per line)</label><textarea class="modal-textarea" id="mi-criteria"></textarea></div>
-    <div class="modal-row"><label class="modal-label">Labels (comma-separated)</label><input class="modal-input" id="mi-labels"/></div>
-    <div class="modal-footer"><button class="btn" data-action="cancelAdd">Cancel</button><button class="btn btn-run" data-action="submitAdd">Add Issue</button></div>
+    <div class="modal-row"><label class="modal-label">${s.acceptanceCriteria}</label><textarea class="modal-textarea" id="mi-criteria"></textarea></div>
+    <div class="modal-row"><label class="modal-label">${s.labels}</label><input class="modal-input" id="mi-labels"/></div>
+    <div class="modal-footer"><button class="btn" data-action="cancelAdd">${s.cancel}</button><button class="btn btn-run" data-action="submitAdd">${locale==='es'?'Añadir Issue':'Add Issue'}</button></div>
   </div>
 </div>
 
 <!-- Edit Issue Modal -->
 <div class="modal-overlay" id="editModal" style="display:none" data-close="editModal">
   <div class="modal" style="width:480px">
-    <div class="modal-title">✎ Edit Issue</div>
+    <div class="modal-title">${s.editIssue}</div>
     <input type="hidden" id="em-id"/>
-    <div class="modal-row"><label class="modal-label">Title *</label><input class="modal-input" id="em-title"/></div>
-    <div class="modal-row"><label class="modal-label">Description</label><textarea class="modal-textarea" id="em-desc" style="min-height:80px"></textarea></div>
+    <div class="modal-row"><label class="modal-label">${s.title} *</label><input class="modal-input" id="em-title"/></div>
+    <div class="modal-row"><label class="modal-label">${s.description}</label><textarea class="modal-textarea" id="em-desc" style="min-height:80px"></textarea></div>
     <div class="modal-row-2">
-      <div class="modal-row"><label class="modal-label">Epic</label><input class="modal-input" id="em-epic"/></div>
-      <div class="modal-row"><label class="modal-label">Priority</label><select class="modal-select" id="em-priority"><option value="P0">🔴 P0</option><option value="P1">🟠 P1</option><option value="P2">🔵 P2</option><option value="P3">⚪ P3</option></select></div>
+      <div class="modal-row"><label class="modal-label">${s.epicLabel}</label><input class="modal-input" id="em-epic"/></div>
+      <div class="modal-row"><label class="modal-label">${s.priority}</label><select class="modal-select" id="em-priority"><option value="P0">🔴 P0</option><option value="P1">🟠 P1</option><option value="P2">🔵 P2</option><option value="P3">⚪ P3</option></select></div>
     </div>
-    <div class="modal-row"><label class="modal-label">Acceptance Criteria (one per line)</label><textarea class="modal-textarea" id="em-criteria" style="min-height:80px"></textarea></div>
+    <div class="modal-row"><label class="modal-label">${s.acceptanceCriteria}</label><textarea class="modal-textarea" id="em-criteria" style="min-height:80px"></textarea></div>
     <div class="modal-row-2">
-      <div class="modal-row"><label class="modal-label">Labels (comma-separated)</label><input class="modal-input" id="em-labels"/></div>
-      <div class="modal-row"><label class="modal-label">Dependencies (comma-separated IDs)</label><input class="modal-input" id="em-deps"/></div>
+      <div class="modal-row"><label class="modal-label">${s.labels}</label><input class="modal-input" id="em-labels"/></div>
+      <div class="modal-row"><label class="modal-label">${s.dependencies}</label><input class="modal-input" id="em-deps"/></div>
     </div>
-    <div class="modal-footer"><button class="btn" data-action="cancelEdit">Cancel</button><button class="btn btn-run" data-action="submitEdit">Save</button></div>
+    <div class="modal-footer"><button class="btn" data-action="cancelEdit">${s.cancel}</button><button class="btn btn-run" data-action="submitEdit">${s.save}</button></div>
   </div>
 </div>
 
@@ -383,13 +395,15 @@ export function getBoardContent(
 	prd: Prd | null,
 	memories: string | null,
 	logs: Record<string, TaskLog>,
-	cfg: BoardConfig
+	cfg: BoardConfig,
+	statuses: Record<string, string> = {}
 ): string {
-	if (!prd) { return emptyState(); }
+	const locale = cfg.locale ?? 'en';
+	if (!prd) { return emptyState(locale); }
 	const bar = statsBar(prd, cfg);
-	if (cfg.view === 'history') { return bar + historyView(logs); }
-	if (cfg.view === 'epic')    { return bar + epicView(prd, logs); }
-	return bar + boardView(prd, logs, cfg.autoRun) + guardrailsPanel(cfg.guardrails, cfg.boundaries) + (memories ? memoriesPanel(memories) : '');
+	if (cfg.view === 'history') { return bar + historyView(logs, locale); }
+	if (cfg.view === 'epic')    { return bar + epicView(prd, logs, statuses, locale); }
+	return bar + boardView(prd, logs, cfg.autoRun, locale) + guardrailsPanel(cfg.guardrails, cfg.boundaries) + (memories ? memoriesPanel(memories) : '');
 }
 
 
@@ -404,10 +418,6 @@ export function esc(s: unknown): string {
 		.replace(/'/g,'&#39;');
 }
 
-export function escJsArg(s: unknown): string {
-	return esc(JSON.stringify(String(s ?? '')));
-}
-
 export function escAttr(s: unknown): string {
 	return esc(String(s ?? '').replace(/[\u0000-\u001f\u007f]/g, ''));
 }
@@ -415,7 +425,8 @@ export function escAttr(s: unknown): string {
 const PRIORITY_DOT: Record<string, string> = { P0:'#f85149', P1:'#e3b341', P2:'#58a6ff', P3:'#6e7681' };
 const PRIORITY_LABEL: Record<string, string> = { P0:'Critical', P1:'High', P2:'Medium', P3:'Low' };
 
-function card(issue: Issue, log: TaskLog | null): string {
+function card(issue: Issue, log: TaskLog | null, locale: Locale = 'en'): string {
+	const s = t(locale);
 	const pc = PRIORITY_DOT[issue.priority] ?? '#6e7681';
 	const pl = PRIORITY_LABEL[issue.priority] ?? issue.priority;
 	const deps = issue.dependencies?.length ? `<div class="card-deps">⛓ ${esc(issue.dependencies.join(', '))}</div>` : '';
@@ -438,10 +449,10 @@ function card(issue: Issue, log: TaskLog | null): string {
 	const criteriaTooltip = criteriaCount > 0 ? issue.acceptanceCriteria.map((ac,i) => `${i+1}. ${ac}`).join('\n') : '';
 
 	let actions = '';
-	if (issue.status === 'todo')        { actions = `<button class="btn btn-run" data-action="runTask" data-id="${idAttr}">▶ Run</button>`; }
-	else if (issue.status === 'blocked'){ actions = `<button class="btn btn-disabled" disabled>⛓ Blocked</button>`; }
-	else if (issue.status === 'inprogress') { actions = `<button class="btn btn-run" data-action="contextRefresh" data-id="${idAttr}" title="Send context recovery prompt to chat">🔄 Refresh</button><button class="btn btn-done" data-action="markDone" data-id="${idAttr}">✓ Mark done</button>`; }
-	else { actions = `<button class="btn btn-note" data-action="addNote" data-id="${idAttr}" title="Add note">✎</button><button class="btn btn-reset" data-action="resetTask" data-id="${idAttr}">↩ Reset</button>`; }
+	if (issue.status === 'todo')        { actions = `<button class="btn btn-run" data-action="runTask" data-id="${idAttr}">${s.run}</button>`; }
+	else if (issue.status === 'blocked'){ actions = `<button class="btn btn-disabled" disabled>${s.blocked}</button>`; }
+	else if (issue.status === 'inprogress') { actions = `<button class="btn btn-run" data-action="contextRefresh" data-id="${idAttr}" title="${locale==='es'?'Enviar prompt de recuperación de contexto al chat':'Send context recovery prompt to chat'}">${s.refreshContext}</button><button class="btn btn-done" data-action="markDone" data-id="${idAttr}">${s.markDone}</button>`; }
+	else { actions = `<button class="btn btn-note" data-action="addNote" data-id="${idAttr}" title="${s.addNote === '✎' ? (locale==='es'?'Añadir nota':'Add note') : s.addNote}">${s.addNote}</button><button class="btn btn-reset" data-action="resetTask" data-id="${idAttr}">${s.reset}</button>`; }
 
 	return `<div class="card" draggable="true" data-id="${idAttr}" data-status="${statusAttr}">
   <div class="card-header">
@@ -460,46 +471,52 @@ function card(issue: Issue, log: TaskLog | null): string {
 </div>`;
 }
 
-function boardView(prd: Prd, logs: Record<string, TaskLog>, autoRun: boolean): string {
+function boardView(prd: Prd, logs: Record<string, TaskLog>, autoRun: boolean, locale: Locale = 'en'): string {
+	const s = t(locale);
 	const cols = [
-		{ key:'todo',       label:'To Do',       color:'#58a6ff' },
-		{ key:'inprogress', label:'In Progress',  color:'#e3b341' },
-		{ key:'completed',  label:'Done',         color:'#3fb950' },
-		{ key:'blocked',    label:'Blocked',      color:'#f85149' },
+		{ key:'todo',       label: s.colTodo,       color:'#58a6ff' },
+		{ key:'inprogress', label: s.colInProgress,  color:'#e3b341' },
+		{ key:'completed',  label: s.colDone,        color:'#3fb950' },
+		{ key:'blocked',    label: s.colBlocked,     color:'#f85149' },
 	];
 	return `<div class="board">${cols.map(col => {
 		const issues = prd.issues.filter(i => i.status === col.key);
-		const cards  = issues.map(i => card(i, logs[i.id] ?? null)).join('');
+		const cards  = issues.map(i => card(i, logs[i.id] ?? null, locale)).join('');
 		return `<div class="col" data-col="${col.key}">
   <div class="col-header">
     <span class="col-title" style="color:${col.color}">${col.label}</span>
     <span class="col-count">${issues.length}</span>
   </div>
-  <div class="col-body">${cards || '<div style="color:var(--text2);font-size:11px;text-align:center;padding:20px 0">Drop here</div>'}</div>
+  <div class="col-body">${cards || `<div style="color:var(--text2);font-size:11px;text-align:center;padding:20px 0">${s.dropHere}</div>`}</div>
 </div>`;
 	}).join('')}</div>`;
 }
 
-function epicView(prd: Prd, logs: Record<string, TaskLog>): string {
-	const epics = [...new Set(prd.issues.map(i => i.epic || 'General'))];
+function epicView(prd: Prd, logs: Record<string, TaskLog>, statuses: Record<string, string>, locale: Locale = 'en'): string {
+	const s = t(locale);
+	const epics = [...new Set(prd.issues.map(i => i.epic || (locale==='es' ? 'General' : 'General')))];
 	return epics.map(epic => {
 		const issues = prd.issues.filter(i => (i.epic || 'General') === epic);
 		const done   = issues.filter(i => i.status === 'completed').length;
+		// Dependency graph (ADR-006) — shown when the epic has inter-task dependencies
+		const depGraph = buildDependencySvg(issues, statuses);
 		return `<div class="epic-group">
   <div class="epic-group-header">
     <span class="epic-group-title">${esc(epic)}</span>
     <span class="epic-progress">${done}/${issues.length}</span>
   </div>
-  <div class="epic-cards">${issues.map(i => card(i, logs[i.id]??null)).join('')}</div>
+  ${depGraph ? `<div class="epic-deps" style="padding:8px 12px;border-bottom:1px solid var(--border)"><div style="font-size:10px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">⛓ ${locale==='es'?'Dependencias':'Dependencies'}</div>${depGraph}</div>` : ''}
+  <div class="epic-cards">${issues.map(i => card(i, logs[i.id]??null, locale)).join('')}</div>
 </div>`;
 	}).join('');
 }
 
-function historyView(logs: Record<string, TaskLog>): string {
+function historyView(logs: Record<string, TaskLog>, locale: Locale = 'en'): string {
+	const s = t(locale);
 	const items = Object.values(logs).filter(l => l.completedAt).sort((a,b) => (b.completedAt??'').localeCompare(a.completedAt??''));
-	if (!items.length) { return '<div style="padding:20px;color:var(--text2);text-align:center">No completed tasks yet</div>'; }
+	if (!items.length) { return `<div style="padding:20px;color:var(--text2);text-align:center">${s.noCompleted}</div>`; }
 	return `<div style="padding:10px;overflow-x:auto"><table class="history-table">
-<thead><tr><th>ID</th><th>Title</th><th>Duration</th><th>Date</th><th>Note</th></tr></thead>
+<thead><tr><th>${s.colId}</th><th>${s.colTitle}</th><th>${s.colDuration}</th><th>${s.colDate}</th><th>${s.colNote}</th></tr></thead>
 <tbody>${items.map(l => `<tr>
   <td><span class="card-id">${esc(l.id)}</span></td>
   <td>${esc(l.title||l.id)}</td>
@@ -510,14 +527,23 @@ function historyView(logs: Record<string, TaskLog>): string {
 }
 
 function statsBar(prd: Prd, cfg: BoardConfig): string {
+	const locale = cfg.locale ?? 'en';
+	const s = t(locale);
 	const stats   = { total: prd.issues.length, completed: prd.issues.filter(i=>i.status==='completed').length };
 	const pct     = stats.total ? Math.round((stats.completed/stats.total)*100) : 0;
 	const epics   = [...new Set(prd.issues.map(i=>i.epic).filter(Boolean))];
-	const views   = [['board','⊞ Board'],['epic','⬡ Epic'],['history','📋 History']] as const;
+	const views   = [['board', s.board],['epic', s.epic],['history', s.history]] as const;
 	const viewBtns = views.map(([v,l]) => `<button class="btn btn-sm ${cfg.view===v?'btn-view-active':''}" data-action="setView" data-id="${escAttr(v)}">${l}</button>`).join('');
 	const runnerBtn = cfg.autoRun
-		? `<button class="btn btn-sm btn-runner-on" data-action="stopRunner">⏹ Stop</button>`
-		: `<button class="btn btn-sm btn-runner-off" data-action="startRunner">⚡ Auto-run</button>`;
+		? `<button class="btn btn-sm btn-runner-on" data-action="stopRunner">${s.stop}</button>`
+		: `<button class="btn btn-sm btn-runner-off" data-action="startRunner">${s.autoRun}</button>`;
+
+	// Health score badge (ADR-005) — shown when health data is available
+	const health = cfg.health;
+	const healthLabel = health ? localizedHealthLabel(health.label, locale) : '';
+	const healthBadge = health
+		? `<span class="health-badge health-tooltip" style="background:${health.color}22;color:${health.color}" data-tooltip="${locale==='es' ? 'Completadas' : 'Completion'}: +${health.breakdown.completion}\n${locale==='es' ? 'Tasa de éxito' : 'Success rate'}: +${health.breakdown.successRate}\n${locale==='es' ? 'Actividad reciente' : 'Recent activity'}: +${health.breakdown.throughput}\n${locale==='es' ? 'Penalización por bloqueos' : 'Blocker penalty'}: ${health.breakdown.blockerPenalty}"><span class="health-dot" style="background:${health.color}"></span>${health.score} · ${healthLabel}</span>`
+		: '';
 
 	return `<div class="stats-bar">
   <div class="stats-top">
@@ -525,22 +551,23 @@ function statsBar(prd: Prd, cfg: BoardConfig): string {
     <span class="project-desc">${esc(prd.description||'')}</span>
     <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
     <span class="progress-pct">${stats.completed}/${stats.total} ${pct}%</span>
+    ${healthBadge}
   </div>
   <div class="epics-row">${epics.map(e=>`<span class="epic-chip">${esc(e!)}</span>`).join('')}</div>
   <div class="stats-actions">
     <div class="view-switcher">${viewBtns}</div>
     ${runnerBtn}
-    <button class="btn btn-sm btn-github" data-action="pushToGitHub" title="Push to GitHub">⬆ GitHub</button>
-    <button class="btn btn-sm btn-github" data-action="syncFromGitHub" title="Sync from GitHub">⬇ Sync</button>
-    <button class="btn btn-sm btn-add" data-action="showAddIssue" title="Add new issue">＋ Issue</button>
-    <button class="btn btn-sm btn-add" data-action="addFromChat" title="Add via Chat">＋ Chat</button>
-    <button class="btn btn-sm" data-action="openPrd" title="Edit prd.json">📄 PRD</button>
-    <button class="btn btn-sm" data-action="openMemories">🧠 Memory</button>
-    <button class="btn btn-sm btn-optimize" data-action="optimizeMemory" title="Optimize memories.md — compress and remove duplicates">🧹 Optimize</button>
-    <button class="btn btn-sm" data-action="importPlan" title="Import or append from Plan">⬇ Plan</button>
-    <button class="btn btn-sm btn-setup" data-action="setupProject" title="Generate AGENTS.md and plans/">⚙ Agents</button>
-    <button class="btn btn-sm" data-action="openSettings">⚙</button>
-    <button class="btn btn-sm" data-action="refresh">↻</button>
+    <button class="btn btn-sm btn-github" data-action="pushToGitHub" title="${locale==='es'?'Subir a GitHub':'Push to GitHub'}">${s.pushGithub}</button>
+    <button class="btn btn-sm btn-github" data-action="syncFromGitHub" title="${locale==='es'?'Sincronizar desde GitHub':'Sync from GitHub'}">${s.syncGithub}</button>
+    <button class="btn btn-sm btn-add" data-action="showAddIssue" title="${locale==='es'?'Añadir nuevo issue':'Add new issue'}">${s.addIssue}</button>
+    <button class="btn btn-sm btn-add" data-action="addFromChat" title="${locale==='es'?'Añadir vía Chat':'Add via Chat'}">${s.addChat}</button>
+    <button class="btn btn-sm" data-action="openPrd" title="${locale==='es'?'Editar prd.json':'Edit prd.json'}">${s.openPrd}</button>
+    <button class="btn btn-sm" data-action="openMemories">${s.openMemory}</button>
+    <button class="btn btn-sm btn-optimize" data-action="optimizeMemory" title="${locale==='es'?'Optimizar memories.md — comprimir y eliminar duplicados':'Optimize memories.md — compress and remove duplicates'}">${s.optimize}</button>
+    <button class="btn btn-sm" data-action="importPlan" title="${locale==='es'?'Importar o anexar desde Plan':'Import or append from Plan'}">${s.plan}</button>
+    <button class="btn btn-sm btn-setup" data-action="setupProject" title="${locale==='es'?'Generar AGENTS.md y plans/':'Generate AGENTS.md and plans/'}">${s.agents}</button>
+    <button class="btn btn-sm" data-action="openSettings">${s.settings}</button>
+    <button class="btn btn-sm" data-action="refresh">${s.refresh}</button>
   </div>
 </div>`;
 }
@@ -564,15 +591,28 @@ function memoriesPanel(memories: string): string {
 </details>`;
 }
 
-function emptyState(): string {
+function emptyState(locale: Locale = 'en'): string {
+	const s = t(locale);
 	return `<div class="empty-state">
   <div class="empty-icon">🚀</div>
-  <div class="empty-title">No prd.json found</div>
-  <div class="empty-sub">Generate one from a project description or import a Plan.</div>
+  <div class="empty-title">${s.emptyNoPrd}</div>
+  <div class="empty-sub">${s.emptyNoPrdSub}</div>
   <div style="display:flex;gap:8px;margin-top:8px">
-    <button class="btn btn-primary" data-action="initProject">Init Project</button>
-    <button class="btn btn-primary" data-action="importPlan" style="background:#1f6feb;border-color:#1f6feb">⬇ Import Plan</button>
+    <button class="btn btn-primary" data-action="initProject">${s.initProject}</button>
+    <button class="btn btn-primary" data-action="importPlan" style="background:#1f6feb;border-color:#1f6feb">${s.importPlan}</button>
   </div>
-  <div class="empty-hint">Or place a <code>prd.json</code> in the workspace root</div>
+  <div class="empty-hint">${s.emptyHint}</div>
 </div>`;
+}
+
+/** Localize the health score label (ADR-005). */
+function localizedHealthLabel(label: HealthScore['label'], locale: Locale): string {
+	const s = t(locale);
+	switch (label) {
+		case 'Excellent': return s.healthExcellent;
+		case 'Good':     return s.healthGood;
+		case 'Fair':     return s.healthFair;
+		case 'At risk':  return s.healthAtRisk;
+		case 'Critical': return s.healthCritical;
+	}
 }
