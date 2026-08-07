@@ -8,7 +8,7 @@ import { Prd } from '../prdManager';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export interface ImportedPrd {
+interface ImportedPrd {
 	project:     string;
 	description: string;
 	version:     string;
@@ -138,6 +138,11 @@ export function importPlanToPrd(markdown: string): ImportedPrd | null {
 
 	// Push last step
 	if (currentStep) { issues.push(currentStep); }
+
+	// Post-process: chain steps with sequential dependencies (step N depends on step N-1)
+	for (let i = 1; i < issues.length; i++) {
+		issues[i].dependencies.push(issues[i - 1].id);
+	}
 
 	// Post-process: add relevant file references to descriptions
 	if (relevantFiles.length > 0) {

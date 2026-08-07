@@ -12,7 +12,7 @@ import { safeTaskId } from './stateManager';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export interface AgentProfile {
+interface AgentProfile {
 	engine: string;
 	model: string;
 	mode: string;
@@ -21,7 +21,7 @@ export interface AgentProfile {
 
 // ── Profile resolution ───────────────────────────────────────────────────────
 
-export function inferTaskType(task: any): string {
+function inferTaskType(task: any): string {
 	const text = [
 		task.title ?? '',
 		task.description ?? '',
@@ -37,7 +37,7 @@ export function inferTaskType(task: any): string {
 	return 'default';
 }
 
-export function resolveAgentProfile(task: any, cfg: vscode.WorkspaceConfiguration): AgentProfile {
+function resolveAgentProfile(task: any, cfg: vscode.WorkspaceConfiguration): AgentProfile {
 	const taskType = inferTaskType(task);
 	const profiles = cfg.get<Record<string, Partial<AgentProfile>>>('modelProfiles', {});
 	const selected = profiles[taskType] ?? profiles.default ?? {};
@@ -51,7 +51,7 @@ export function resolveAgentProfile(task: any, cfg: vscode.WorkspaceConfiguratio
 
 // ── Memory loader ────────────────────────────────────────────────────────────
 
-export function loadMemory(root: string, configuredPath: string = '.agent/memories.md'): string | null {
+function loadMemory(root: string, configuredPath: string = '.agent/memories.md'): string | null {
 	const p = path.isAbsolute(configuredPath) ? configuredPath : path.join(root, configuredPath);
 	if (!fs.existsSync(p)) { return null; }
 	return fs.readFileSync(p, 'utf-8').trim() || null;

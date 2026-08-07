@@ -17,7 +17,7 @@
 import * as vscode from 'vscode';
 import { sleep } from './commands/task';
 
-export interface ChatOptions {
+interface ChatOptions {
 	/** Start a fresh chat session before sending (clears prior context). */
 	freshContext?: boolean;
 	/** Small delay after newChat to let the view settle (default 400ms). */

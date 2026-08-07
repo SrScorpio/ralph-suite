@@ -2,16 +2,14 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { getBoardContent, esc, escAttr, escJsArg } from '../webview/kanbanHtml';
+import { getBoardContent, esc, escAttr } from '../webview/kanbanHtml';
 import { PrdManager } from '../prdManager';
 import { RalphStateManager, safeTaskId } from '../stateManager';
 
 describe('sanitization', () => {
-	it('escapes HTML, attributes and inline JS arguments', () => {
+	it('escapes HTML and attributes', () => {
 		assert.strictEqual(esc(`<img src=x onerror='x'>`), '&lt;img src=x onerror=&#39;x&#39;&gt;');
 		assert.strictEqual(escAttr('a"\n<b>'), 'a&quot;&lt;b&gt;');
-		assert.ok(escJsArg(`bad');alert(1);//`).startsWith('&quot;'));
-		assert.ok(escJsArg(`bad');alert(1);//`).includes('&#39;'));
 	});
 
 	it('escapes PRD content rendered into the board', () => {
