@@ -4,6 +4,40 @@ All notable changes to Ralph Suite are documented here.
 
 ---
 
+## [1.9.1] - 2026-08-07
+
+### Fixed
+- **Bug crítico en `detectLocale()`** — `i18n.ts` usaba `declare const vscode` en vez de `import * as vscode`, así que en runtime la variable era `undefined` y la detección de idioma siempre devolvía `'en'` aunque VS Code estuviera en español. Ahora importa `vscode` correctamente y lee `vscode.env.language`.
+- **Traducción incompleta** — en la v1.9.0 solo se tradujeron columnas, empty state e history view. Ahora la traducción es completa: botones de la stats bar, acciones de tarjetas, modales Add/Edit Issue, tooltip del health score, labels de épicas y headers de la tabla de historial.
+
+### Changed
+- `getShellHtml(nonce, locale)` ahora recibe el locale y traduce los modales estáticos del shell HTML.
+- Mock de VS Code (`vscodeMock.ts/.js`) ampliado con `env.language` y `env.locale` para soportar tests de i18n.
+
+---
+
+## [1.9.0] - 2026-08-04
+
+### Added
+- **Health score (ADR-005)** — métrica de salud del proyecto (0-100) calculada desde `.ralph/task-*-log.json`, mostrada como badge con tooltip de desglose (completion, success rate, throughput, blocker penalty). Visible en la barra de stats del board.
+- **Dependency graph visual (ADR-006)** — render SVG de dependencias en la vista Epic. Muestra flechas entre tareas dependientes, con código de color: verde (satisfecha), rojo (bloqueante), y tareas bloqueadas con borde ámbar.
+- **Infraestructura i18n (`src/i18n.ts`)** — catálogo de traducciones para el webview. Detecta el idioma de VS Code (`vscode.env.language`) y traduce columnas, empty state, history view. Soporta **en** y **es**; añadir más idiomas es copiar un bloque.
+- **Tests para `chatLauncher` (5)** y **`planImport` (13)** — cobertura nueva para los módulos críticos sin test.
+- **Dependencias secuenciales en planImport** — los pasos importados de un Plan markdown ahora se encadenan automáticamente (STEP-N depende de STEP-(N-1)), como prometía el README.
+
+### Changed
+- **Refactor `kanbanPanel.ts`** — extraídos los sanitizadores (`safeMessageId`, `isBoardStatus`, `cleanText`, `cleanPriority`, `cleanIssueFields`, `getNonce`) a `src/boardSanitizers.ts`. Reduce el tamaño del panel y permite testearlos de forma aislada.
+- **Mock de VS Code unificado (singleton)** — `vscodeMock.ts` ahora devuelve siempre el mismo objeto, permitiendo a los tests espiar/mutar `vscode.commands.executeCommand` y observar el cambio en módulos que capturaron su referencia al importarse.
+- **Warning de ES modules eliminado** — `NODE_NO_WARNINGS=1` en el script de test.
+- **`Issue`/`Prd`/`TaskLog` sin duplicar** — `kanbanHtml.ts` ahora importa los tipos de `prdManager`/`stateManager` en vez de redeclararlos.
+- **README actualizado** — versión 1.9.0, tabla de configuración completa (incluye `engine`, `modelProfiles`, `prdPath`, `memoriesPath`, `memoryOptimizeEvery`, `memoryOptimizeReview`), sección de prerrequisitos.
+
+### Removed
+- **`escJsArg`** eliminado — era un helper para escapar argumentos JS de handlers inline (`onclick`), pero esos handlers se eliminaron en v1.8.0 con el event delegation. No quedaba ningún caller de producción.
+- **Exports innecesarios** — `AgentProfile`, `inferTaskType`, `resolveAgentProfile`, `loadMemory`, `ChatOptions`, `ImportedPrd` dejaron de ser `export` (solo se usaban internamente).
+
+---
+
 ## [1.8.1] - 2026-08-02
 
 ### Documented

@@ -188,24 +188,38 @@ Configure in `Ctrl+,` → Ralph Suite:
 
 ---
 
+## Prerequisites
+
+- VSCode 1.103+ (July 2025) or newer
+- An AI chat provider installed and signed in: **GitHub Copilot**, **Claude**, **Codex**, or **OpenCode**
+- Node.js 20+ (for development/packaging only)
+
+---
+
 ## Configuration
 
 `Ctrl+,` → search **ralph-suite**
 
 | Setting | Default | Description |
 |---------|---------|-------------|
+| `engine` | `copilot` | AI engine: `copilot`, `codex`, `claude`, `opencode` |
+| `modelProfiles` | (object) | Agent/model recommendations by task type (default, bugfix, review, security) |
 | `agentRole` | `Senior Software Engineer` | Role injected into AGENTS.md |
 | `agentStack` | `` | Tech stack for AGENTS.md |
 | `agentProject` | `` | Project description for AGENTS.md |
 | `agentCheckpoints` | (list) | Actions requiring confirmation |
 | `maxLoops` | `5` | Max tasks per auto-run session |
 | `freshContext` | `true` | Open new chat window per task |
+| `prdPath` | `prd.json` | Path to prd.json (relative to workspace) |
+| `memoriesPath` | `.agent/memories.md` | Path to project memories file |
 | `taskTimeoutMs` | `600000` | Max ms to wait per task (10 min) |
 | `taskRetries` | `1` | Retries before marking as failed |
 | `minWaitMs` | `15000` | Min wait before polling for completion |
 | `pollIntervalMs` | `5000` | How often to check for completion |
 | `guardrails` | (14 rules) | Rules injected in every task prompt |
 | `boundaries` | `[]` | Paths the agent must never touch |
+| `memoryOptimizeEvery` | `0` | Auto-optimize memories.md every N completed tasks (0 = off) |
+| `memoryOptimizeReview` | `true` | Show optimization prompt in Chat for review before applying |
 
 ### Default guardrails
 
@@ -281,4 +295,4 @@ If you have a Plan agent markdown file (from Copilot's `/plan` command):
 
 ## Version
 
-Current: **1.7.0** — see [CHANGELOG.md](CHANGELOG.md) for full history.
+Current: **1.9.1** — see [CHANGELOG.md](CHANGELOG.md) for full history.

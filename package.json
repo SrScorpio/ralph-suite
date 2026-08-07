@@ -2,7 +2,7 @@
   "name": "ralph-suite",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.8.1",
+  "version": "1.9.1",
   "publisher": "ralph-suite",
   "engines": {
     "vscode": "^1.103.0"
@@ -255,7 +255,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "package": "vsce package --no-dependencies",
-    "test": "npx mocha --require ts-node/register --require ./src/test/vscodeMock.js 'src/test/**/*.test.ts' --timeout 10000"
+    "test": "NODE_NO_WARNINGS=1 npx mocha --require ts-node/register --require ./src/test/vscodeMock.js 'src/test/**/*.test.ts' --timeout 10000"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.0",
