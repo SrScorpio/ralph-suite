@@ -248,6 +248,29 @@ Configure in `Ctrl+,` → Ralph Suite:
 
 Requires the GitHub MCP connector enabled in VSCode.
 
+These board actions are **chat prompts**, not a public command API. There is no `ralph-suite.syncIssue` command. Hosts must not pretend otherwise.
+
+## Optional host: Alfred Dev
+
+[Alfred Dev for VS Code](https://github.com/SrScorpio/alfred-dev-vscode) can wrap Ralph when this extension is installed **and** active (`ralph-suite.ralph-suite`). Alfred does **not** list Ralph as `extensionDependencies`: a user without Ralph keeps a full Alfred install.
+
+| Layer | Owner | Path / API |
+|-------|--------|------------|
+| Collaborative work | Alfred / GitHub Issues+PRs | GitHub |
+| Local backlog | Ralph | `prd.json` (`ralph-suite.prdPath`) |
+| Local runtime | Ralph | `.ralph/task-<ID>-status`, `-note`, `-log.json` |
+| Stable project memory | Ralph | `.agent/memories.md` |
+
+Public commands a host may feature-detect:
+
+- `ralph-suite.openKanban`
+- `ralph-suite.runTask` — optional `taskId` argument (`ISSUE-001`); otherwise next pending
+- `ralph-suite.startRunner` / `ralph-suite.stopRunner` — require the Kanban webview
+
+In a multi-root window, Ralph prefers the folder that actually contains `prd.json`. If none do, it falls back to the first folder and keeps the existing errors (`No workspace open` / `No prd.json found`).
+
+Paired issues: [ralph-suite#1](https://github.com/SrScorpio/ralph-suite/issues/1), [alfred-dev-vscode#40](https://github.com/SrScorpio/alfred-dev-vscode/issues/40). Parallel dispatch and `syncIssue` remain [alfred-dev-vscode#3](https://github.com/SrScorpio/alfred-dev-vscode/issues/3).
+
 ---
 
 ## Init Project flow

@@ -14,6 +14,7 @@ import { initProject, setupProject } from './commands/project';
 import { runTaskWithRetry } from './commands/task';
 import { optimizeMemory } from './commands/memory';
 import { buildPrompt } from './promptBuilders';
+import { resolveWorkspaceRoot } from './workspaceRoot';
 
 export function _doActivate(context: vscode.ExtensionContext, output: vscode.OutputChannel) {
 	// Status bar
@@ -125,7 +126,10 @@ export function _doActivate(context: vscode.ExtensionContext, output: vscode.Out
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getWorkspaceRoot(): string | undefined {
-	return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+	return resolveWorkspaceRoot(
+		vscode.workspace.workspaceFolders?.map(folder => folder.uri.fsPath),
+		getPrdPathSetting(),
+	);
 }
 
 function getPrdPathSetting(): string {
