@@ -5,10 +5,18 @@ Inspired by the [RALPH Wiggum technique](https://github.com/badlogic/lemmy/issue
 
 ---
 
-## Install (no Marketplace needed)
+## Install (GitHub Releases, no Marketplace)
+
+Ralph Suite is **not** on the Visual Studio Marketplace. Install the VSIX from [GitHub Releases](https://github.com/SrScorpio/ralph-suite/releases). After the `v1.10.0` tag, the asset is `ralph-suite-1.10.0.vsix`.
+
+1. Open the latest [GitHub Release](https://github.com/SrScorpio/ralph-suite/releases)
+2. Download `ralph-suite-1.10.0.vsix`
+3. VS Code → Extensions → ⋯ → **Install from VSIX…** → select the file
+
+To build from source instead:
 
 ```bash
-# 1. Clone / copy this folder
+# 1. Clone this repository
 cd ralph-suite
 
 # 2. Install dependencies
@@ -19,13 +27,11 @@ npm run compile
 
 # 4. Package as .vsix
 npm run package
-# → creates ralph-suite-X.X.X.vsix
+# → creates ralph-suite-1.10.0.vsix
 
-# 5. Install in VSCode
+# 5. Install in VS Code
 # Extensions panel → ⋯ → Install from VSIX → select the file
 ```
-
-Or download the latest `.vsix` directly and install from VSIX.
 
 ---
 
@@ -67,6 +73,8 @@ docs/
 ```
 
 **Legacy fallback:** workspaces from 1.9.x with a root `prd.json` and no `docs/ralph/prd.json` keep using the root file. Ralph does not copy or merge two backlogs. A custom `ralph-suite.prdPath` is honoured (still no `..` escape). GitHub remains Alfred's collaborative source of truth; this layout only changes where the local backlog lives.
+
+**This repository** still contains historical `plans/` (`arquitectura.md`, `seguridad.md`, `decisiones.md`). Those files are not deleted. **New user projects** created with Init / Setup get the `docs/` tree above, not `plans/`.
 
 ---
 
@@ -327,4 +335,4 @@ If you have a Plan agent markdown file (from Copilot's `/plan` command):
 
 ## Version
 
-Current: **1.9.1** — see [CHANGELOG.md](CHANGELOG.md) for full history.
+Current: **1.10.0** — see [CHANGELOG.md](CHANGELOG.md) for full history. Distributed from GitHub Releases only (no Marketplace).

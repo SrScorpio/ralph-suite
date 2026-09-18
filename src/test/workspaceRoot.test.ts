@@ -6,6 +6,11 @@ import { PrdManager } from '../prdManager';
 import { resolveWorkspaceRoot } from '../workspaceRoot';
 
 describe('workspace root for Alfred / multi-root', () => {
+	it('ships package.json as version 1.10.0', () => {
+		const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
+		assert.strictEqual(packageJson.version, '1.10.0');
+	});
+
 	it('announces the public command contract used by Alfred Dev', () => {
 		const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
 		const commands = (packageJson.contributes.commands as { command: string }[]).map((entry) => entry.command);
