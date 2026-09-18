@@ -6,6 +6,8 @@ All notable changes to Ralph Suite are documented here.
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-09-18
+
 ### Added
 - Public host-extension contract for Alfred Dev: documented command IDs (`openKanban`, `runTask`, `startRunner`, `stopRunner`). `ralph-suite.syncIssue` is still not contributed.
 - Multi-root workspace root: commands prefer the folder that contains `prd.json` (honours `ralph-suite.prdPath`, no path traversal) instead of always using `workspaceFolders[0]`.
@@ -15,6 +17,7 @@ All notable changes to Ralph Suite are documented here.
 - README documents the optional relationship with Alfred Dev (`SrScorpio/alfred-dev-vscode`): GitHub Issues remain Alfred's source of truth; `prd.json` remains Ralph's local backlog.
 - Default `ralph-suite.prdPath` is `docs/ralph/prd.json`. If that file is missing and a root `prd.json` exists, Ralph keeps using the legacy root file (no copy/merge of two backlogs). Custom `prdPath` is still honoured and cannot escape the workspace.
 - Setup Project command title, Kanban copy and generated `AGENTS.md` read list now point at `docs/`, not `plans/` as the primary convention.
+- Distribution is GitHub Releases only (VSIX + source from the tag). There is no Marketplace listing.
 
 ## [1.9.1] - 2026-08-07
 
