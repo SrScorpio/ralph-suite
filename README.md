@@ -35,7 +35,7 @@ Or download the latest `.vsix` directly and install from VSIX.
 2. Click the `$(layout-panel) Ralph` button in the status bar — or `Ctrl+Shift+R` / `Cmd+Shift+R`
 3. If no `prd.json` exists → click **Init Project** → describe your project goal in Chat
 4. The AI will ask clarifying questions and generate all project files in one session
-5. Once `prd.json` appears, the board loads automatically
+5. Once `docs/ralph/prd.json` appears (or a legacy root `prd.json`), the board loads automatically
 6. Click **▶ Run** on any issue to send it to the AI chat
 
 ---
@@ -45,21 +45,28 @@ Or download the latest `.vsix` directly and install from VSIX.
 Ralph Suite creates and manages these files in your workspace:
 
 ```
-prd.json                    ← task backlog (committed to git)
-AGENTS.md                   ← agent manual: role, rules, checkpoints
+AGENTS.md                   ← agent index at root
 .github/
   copilot-instructions.md   ← auto-read by Copilot, references AGENTS.md
-plans/
-  arquitectura.md           ← architecture decisions and conventions
-  seguridad.md              ← security rules, secrets, auth
-  decisiones.md             ← ADR log (why X was chosen over Y)
+docs/
+  project/
+    architecture.md         ← architecture decisions and conventions
+    threat-model.md         ← security rules, secrets, auth
+    status.md               ← human snapshot (not the Kanban)
+  adr/                      ← ADR log (why X was chosen over Y)
+  ralph/
+    prd.json                ← task backlog (committed to git)
+    IMPLEMENTATION_PLAN.md  ← optional human plan; does not replace prd.json
 .agent/
   memories.md               ← accumulated project knowledge (committed)
 .ralph/                     ← runtime state — gitignored automatically
   task-ID-status            ← inprogress | completed
   task-ID-log.json          ← duration, note, timestamps
   task-ID-note              ← signal file from agent (consumed immediately)
+  progress.md               ← loop scratch if written; never docs/progress.md
 ```
+
+**Legacy fallback:** workspaces from 1.9.x with a root `prd.json` and no `docs/ralph/prd.json` keep using the root file. Ralph does not copy or merge two backlogs. A custom `ralph-suite.prdPath` is honoured (still no `..` escape). GitHub remains Alfred's collaborative source of truth; this layout only changes where the local backlog lives.
 
 ---
 
@@ -124,7 +131,7 @@ Table of all completed tasks with duration, completion date, and note.
 | 📄 PRD | Open prd.json in editor |
 | 🧠 Memory | Open .agent/memories.md |
 | ⬇ Plan | Import / append from Plan agent markdown |
-| ⚙ Agents | Generate or regenerate AGENTS.md and plans/ |
+| ⚙ Agents | Generate or regenerate AGENTS.md and docs/ |
 | ⚙ | Settings |
 | ↻ | Refresh board |
 
@@ -210,7 +217,7 @@ Configure in `Ctrl+,` → Ralph Suite:
 | `agentCheckpoints` | (list) | Actions requiring confirmation |
 | `maxLoops` | `5` | Max tasks per auto-run session |
 | `freshContext` | `true` | Open new chat window per task |
-| `prdPath` | `prd.json` | Path to prd.json (relative to workspace) |
+| `prdPath` | `docs/ralph/prd.json` | Path to prd.json (relative to workspace). If the default path is missing and a root `prd.json` exists, Ralph uses the legacy root file. |
 | `memoriesPath` | `.agent/memories.md` | Path to project memories file |
 | `taskTimeoutMs` | `600000` | Max ms to wait per task (10 min) |
 | `taskRetries` | `1` | Retries before marking as failed |
@@ -257,7 +264,7 @@ These board actions are **chat prompts**, not a public command API. There is no 
 | Layer | Owner | Path / API |
 |-------|--------|------------|
 | Collaborative work | Alfred / GitHub Issues+PRs | GitHub |
-| Local backlog | Ralph | `prd.json` (`ralph-suite.prdPath`) |
+| Local backlog | Ralph | `docs/ralph/prd.json` (`ralph-suite.prdPath`; legacy root `prd.json` still loads) |
 | Local runtime | Ralph | `.ralph/task-<ID>-status`, `-note`, `-log.json` |
 | Stable project memory | Ralph | `.agent/memories.md` |
 
@@ -267,7 +274,7 @@ Public commands a host may feature-detect:
 - `ralph-suite.runTask` — optional `taskId` argument (`ISSUE-001`); otherwise next pending
 - `ralph-suite.startRunner` / `ralph-suite.stopRunner` — require the Kanban webview
 
-In a multi-root window, Ralph prefers the folder that actually contains `prd.json`. If none do, it falls back to the first folder and keeps the existing errors (`No workspace open` / `No prd.json found`).
+In a multi-root window, Ralph prefers the folder that actually has a resolvable PRD (`docs/ralph/prd.json` or legacy root `prd.json`). If none do, it falls back to the first folder and keeps the existing errors (`No workspace open` / `No prd.json found`).
 
 Paired issues: [ralph-suite#1](https://github.com/SrScorpio/ralph-suite/issues/1), [alfred-dev-vscode#40](https://github.com/SrScorpio/alfred-dev-vscode/issues/40). Parallel dispatch and `syncIssue` remain [alfred-dev-vscode#3](https://github.com/SrScorpio/alfred-dev-vscode/issues/3).
 
@@ -278,14 +285,16 @@ Paired issues: [ralph-suite#1](https://github.com/SrScorpio/ralph-suite/issues/1
 1. Click **Init Project** (board or quick menu)
 2. Describe your project goal in the input box
 3. Chat opens with a structured prompt that asks clarifying questions
-4. Once you've answered, the agent generates all 6 files in one go:
+4. Once you've answered, the agent generates the docs/ tree in one go:
    - `AGENTS.md` — agent manual with your guardrails and checkpoints
    - `.github/copilot-instructions.md` — references AGENTS.md
-   - `plans/arquitectura.md` — architecture decisions
-   - `plans/seguridad.md` — security rules and secrets
-   - `plans/decisiones.md` — ADR decision log
-   - `prd.json` — initial task backlog
-5. Board detects `prd.json` creation and opens automatically
+   - `docs/project/architecture.md` — architecture decisions
+   - `docs/project/threat-model.md` — security rules and secrets
+   - `docs/project/status.md` — human snapshot (not the Kanban)
+   - `docs/adr/ADR-001-project-setup.md` — ADR decision log
+   - `docs/ralph/IMPLEMENTATION_PLAN.md` — optional human plan
+   - `docs/ralph/prd.json` — initial task backlog
+5. Board detects PRD creation at the resolved path and opens automatically
 
 ---
 
@@ -311,7 +320,7 @@ If you have a Plan agent markdown file (from Copilot's `/plan` command):
 - No CLI dependencies — runs entirely inside VSCode
 - WebviewPanel with shell + postMessage architecture (shell loaded once, data updated via messages)
 - File watchers on `.ralph/` detect agent completion signals in real time
-- `.ralph/` is gitignored automatically — only `prd.json` and `.agent/memories.md` are committed
+- `.ralph/` is gitignored automatically — only `docs/` (including `docs/ralph/prd.json`) and `.agent/memories.md` are committed. Loop scratch belongs in `.ralph/progress.md`, never `docs/progress.md`.
 - Compatible with Copilot Chat, Claude, and any chat engine accessible via `workbench.action.chat.open`
 
 ---

@@ -51,7 +51,7 @@
       },
       {
         "command": "ralph-suite.setupProject",
-        "title": "Ralph: Setup Project (AGENTS.md + plans/)"
+        "title": "Ralph: Setup Project (AGENTS.md + docs/)"
       },
       {
         "command": "ralph-suite.optimizeMemory",
@@ -142,7 +142,7 @@
         },
         "ralph-suite.prdPath": {
           "type": "string",
-          "default": "prd.json",
+          "default": "docs/ralph/prd.json",
           "description": "%config.prdPath.description%"
         },
         "ralph-suite.memoriesPath": {
@@ -232,7 +232,7 @@
             "Change authentication or security configuration",
             "Install or upgrade major dependencies",
             "Refactor more than 500 lines of code",
-            "Change architecture documented in plans/"
+            "Change architecture documented in docs/"
           ],
           "description": "%config.agentCheckpoints.description%"
         },

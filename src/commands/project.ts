@@ -7,17 +7,11 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { PrdManager } from '../prdManager';
+import { DEFAULT_PRD_PATH, PrdManager } from '../prdManager';
 import { RalphStateManager } from '../stateManager';
 import { KanbanPanel } from '../kanbanPanel';
 import { buildInitPrompt } from '../promptBuilders';
-import {
-	buildAgentsMd,
-	buildCopilotInstructions,
-	buildArquitecturaMd,
-	buildSeguridadMd,
-	buildDecisionesMd,
-} from '../agentsMdBuilders';
+import { buildGeneratedProjectFiles } from '../agentsMdBuilders';
 import { sendToChat } from '../chatLauncher';
 import { resolveWorkspaceRoot } from '../workspaceRoot';
 
@@ -139,33 +133,18 @@ export async function setupProject(output: vscode.OutputChannel): Promise<void> 
 		}
 	}
 
-	const plansDir = path.join(root, 'plans');
-	if (!fs.existsSync(plansDir)) { fs.mkdirSync(plansDir, { recursive: true }); }
-	const githubDir = path.join(root, '.github');
-	if (!fs.existsSync(githubDir)) { fs.mkdirSync(githubDir, { recursive: true }); }
-
 	const now = new Date().toISOString().slice(0, 10);
+	const files = buildGeneratedProjectFiles(role, stack, project, checkpoints, guardrails, now);
 
-	fs.writeFileSync(agentsPath, buildAgentsMd(role, stack, project, checkpoints, guardrails, now), 'utf-8');
-	output.appendLine('[Setup] AGENTS.md written');
-
-	const copilotInstr = path.join(githubDir, 'copilot-instructions.md');
-	if (!fs.existsSync(copilotInstr)) {
-		fs.writeFileSync(copilotInstr, buildCopilotInstructions(project, stack), 'utf-8');
-		output.appendLine('[Setup] .github/copilot-instructions.md written');
-	}
-
-	for (const [fn, content] of Object.entries({
-		'arquitectura.md': buildArquitecturaMd(project, stack, now),
-		'seguridad.md':    buildSeguridadMd(project, now),
-		'decisiones.md':   buildDecisionesMd(project, now),
-	})) {
-		const p = path.join(plansDir, fn);
-		if (!fs.existsSync(p)) {
-			fs.writeFileSync(p, content, 'utf-8');
-			output.appendLine(`[Setup] plans/${fn} written`);
+	for (const file of files) {
+		const target = path.join(root, file.path);
+		const dir = path.dirname(target);
+		if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
+		if (file.path === 'AGENTS.md' || !fs.existsSync(target)) {
+			fs.writeFileSync(target, file.content, 'utf-8');
+			output.appendLine(`[Setup] ${file.path} written`);
 		} else {
-			output.appendLine(`[Setup] plans/${fn} already exists — skipped`);
+			output.appendLine(`[Setup] ${file.path} already exists — skipped`);
 		}
 	}
 
@@ -186,5 +165,5 @@ function getWorkspaceRoot(): string | undefined {
 }
 
 function getPrdPathSetting(): string {
-	return vscode.workspace.getConfiguration('ralph-suite').get<string>('prdPath', 'prd.json');
+	return vscode.workspace.getConfiguration('ralph-suite').get<string>('prdPath', DEFAULT_PRD_PATH) ?? DEFAULT_PRD_PATH;
 }
