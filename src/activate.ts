@@ -5,10 +5,9 @@
  */
 
 import * as vscode from 'vscode';
-import * as path from 'path';
 import { KanbanPanel } from './kanbanPanel';
 import { RalphStateManager } from './stateManager';
-import { DEFAULT_PRD_PATH, PrdManager } from './prdManager';
+import { DEFAULT_PRD_PATH, PrdManager, prdWatchPattern } from './prdManager';
 import { showMenu } from './commands/menu';
 import { initProject, setupProject } from './commands/project';
 import { runTaskWithRetry } from './commands/task';
@@ -110,7 +109,7 @@ export function _doActivate(context: vscode.ExtensionContext, output: vscode.Out
 	// File watchers
 	const workspaceRoot = getWorkspaceRoot();
 	if (workspaceRoot) {
-		const prdPattern = path.relative(workspaceRoot, PrdManager.prdPath(workspaceRoot, getPrdPathSetting())) || DEFAULT_PRD_PATH;
+		const prdPattern = prdWatchPattern(workspaceRoot, getPrdPathSetting());
 		const prdWatcher = vscode.workspace.createFileSystemWatcher(
 			new vscode.RelativePattern(workspaceRoot, prdPattern)
 		);

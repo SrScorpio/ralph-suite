@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { DEFAULT_PRD_PATH, PrdManager, Issue, Prd } from './prdManager';
+import { DEFAULT_PRD_PATH, PrdManager, Issue, Prd, prdWatchPattern } from './prdManager';
 import { RalphStateManager, TaskLog, safeTaskId } from './stateManager';
 import { getShellHtml, getBoardContent, BoardConfig } from './webview/kanbanHtml';
 import { buildPushPrompt, buildSyncPrompt } from './kanban/gitHubSync';
@@ -78,7 +78,7 @@ export class KanbanPanel {
 			}
 			this.render();
 		});
-		watch(new vscode.RelativePattern(this.root, path.relative(this.root, PrdManager.prdPath(this.root, this.prdPathSetting())) || DEFAULT_PRD_PATH), () => this.render());
+		watch(new vscode.RelativePattern(this.root, prdWatchPattern(this.root, this.prdPathSetting())), () => this.render());
 		watch(new vscode.RelativePattern(this.root, path.relative(this.root, RalphStateManager.memoriesPath(this.root, this.memoriesPathSetting())) || '.agent/memories.md'), () => this.render());
 	}
 

@@ -10,6 +10,15 @@ export function isDefaultPrdPathSetting(configuredPath?: string): boolean {
 	return normalized === '' || normalized === DEFAULT_PRD_PATH;
 }
 
+/**
+ * Relative glob for vscode.RelativePattern. Always uses `/` because
+ * path.relative() on Windows yields backslashes that VS Code globs reject.
+ */
+export function prdWatchPattern(root: string, configuredPath = DEFAULT_PRD_PATH): string {
+	const relative = path.relative(root, PrdManager.prdPath(root, configuredPath)) || DEFAULT_PRD_PATH;
+	return relative.replace(/\\/g, '/');
+}
+
 export interface Issue {
 	id: string;
 	title: string;

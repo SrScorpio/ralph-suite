@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { DEFAULT_PRD_PATH, LEGACY_PRD_PATH, PrdManager } from '../prdManager';
+import { DEFAULT_PRD_PATH, LEGACY_PRD_PATH, PrdManager, prdWatchPattern } from '../prdManager';
 import { resolveWorkspaceRoot } from '../workspaceRoot';
 import {
 	buildAgentsMd,
@@ -54,6 +54,21 @@ describe('ISSUE-003 docs/ layout and docs/ralph/prd.json', () => {
 			path.join(tmpDir, 'docs', 'ralph', 'prd.json'),
 		);
 		assert.ok(!PrdManager.prdPath(tmpDir, '../outside.json').includes(`..${path.sep}`));
+	});
+
+	it('builds a RelativePattern glob with forward slashes only', () => {
+		const defaultGlob = prdWatchPattern(tmpDir);
+		assert.strictEqual(defaultGlob, 'docs/ralph/prd.json');
+		assert.ok(!defaultGlob.includes('\\'), `default glob must not contain backslashes: ${defaultGlob}`);
+
+		const customGlob = prdWatchPattern(tmpDir, 'backlog\\nested\\prd.json');
+		assert.strictEqual(customGlob, 'backlog/nested/prd.json');
+		assert.ok(!customGlob.includes('\\'), `custom glob must not contain backslashes: ${customGlob}`);
+
+		const winRoot = 'C:\\Users\\dev\\project';
+		const winGlob = prdWatchPattern(winRoot);
+		assert.strictEqual(winGlob, 'docs/ralph/prd.json');
+		assert.ok(!winGlob.includes('\\'), `windows-root glob must not contain backslashes: ${winGlob}`);
 	});
 
 	it('honours a custom prdPath inside the workspace', () => {
