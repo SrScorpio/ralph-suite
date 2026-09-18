@@ -19,6 +19,7 @@ import {
 	buildDecisionesMd,
 } from '../agentsMdBuilders';
 import { sendToChat } from '../chatLauncher';
+import { resolveWorkspaceRoot } from '../workspaceRoot';
 
 // ── Init project ─────────────────────────────────────────────────────────────
 
@@ -178,7 +179,10 @@ export async function setupProject(output: vscode.OutputChannel): Promise<void> 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function getWorkspaceRoot(): string | undefined {
-	return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+	return resolveWorkspaceRoot(
+		vscode.workspace.workspaceFolders?.map(folder => folder.uri.fsPath),
+		getPrdPathSetting(),
+	);
 }
 
 function getPrdPathSetting(): string {

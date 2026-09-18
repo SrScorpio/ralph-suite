@@ -7,6 +7,7 @@
 import * as vscode from 'vscode';
 import { KanbanPanel } from '../kanbanPanel';
 import { PrdManager } from '../prdManager';
+import { resolveWorkspaceRoot } from '../workspaceRoot';
 
 export async function showMenu(output: vscode.OutputChannel): Promise<void> {
 	const root = getWorkspaceRoot();
@@ -62,5 +63,9 @@ export async function showMenu(output: vscode.OutputChannel): Promise<void> {
 }
 
 function getWorkspaceRoot(): string | undefined {
-	return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+	const prdPathSetting = vscode.workspace.getConfiguration('ralph-suite').get<string>('prdPath', 'prd.json');
+	return resolveWorkspaceRoot(
+		vscode.workspace.workspaceFolders?.map(folder => folder.uri.fsPath),
+		prdPathSetting,
+	);
 }
