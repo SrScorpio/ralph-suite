@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { KanbanPanel } from './kanbanPanel';
 import { RalphStateManager } from './stateManager';
-import { PrdManager } from './prdManager';
+import { DEFAULT_PRD_PATH, PrdManager } from './prdManager';
 import { showMenu } from './commands/menu';
 import { initProject, setupProject } from './commands/project';
 import { runTaskWithRetry } from './commands/task';
@@ -110,7 +110,7 @@ export function _doActivate(context: vscode.ExtensionContext, output: vscode.Out
 	// File watchers
 	const workspaceRoot = getWorkspaceRoot();
 	if (workspaceRoot) {
-		const prdPattern = path.relative(workspaceRoot, PrdManager.prdPath(workspaceRoot, getPrdPathSetting())) || 'prd.json';
+		const prdPattern = path.relative(workspaceRoot, PrdManager.prdPath(workspaceRoot, getPrdPathSetting())) || DEFAULT_PRD_PATH;
 		const prdWatcher = vscode.workspace.createFileSystemWatcher(
 			new vscode.RelativePattern(workspaceRoot, prdPattern)
 		);
@@ -133,5 +133,5 @@ function getWorkspaceRoot(): string | undefined {
 }
 
 function getPrdPathSetting(): string {
-	return vscode.workspace.getConfiguration('ralph-suite').get<string>('prdPath', 'prd.json');
+	return vscode.workspace.getConfiguration('ralph-suite').get<string>('prdPath', DEFAULT_PRD_PATH) ?? DEFAULT_PRD_PATH;
 }

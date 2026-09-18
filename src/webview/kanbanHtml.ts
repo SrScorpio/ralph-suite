@@ -565,7 +565,7 @@ function statsBar(prd: Prd, cfg: BoardConfig): string {
     <button class="btn btn-sm" data-action="openMemories">${s.openMemory}</button>
     <button class="btn btn-sm btn-optimize" data-action="optimizeMemory" title="${locale==='es'?'Optimizar memories.md — comprimir y eliminar duplicados':'Optimize memories.md — compress and remove duplicates'}">${s.optimize}</button>
     <button class="btn btn-sm" data-action="importPlan" title="${locale==='es'?'Importar o anexar desde Plan':'Import or append from Plan'}">${s.plan}</button>
-    <button class="btn btn-sm btn-setup" data-action="setupProject" title="${locale==='es'?'Generar AGENTS.md y plans/':'Generate AGENTS.md and plans/'}">${s.agents}</button>
+    <button class="btn btn-sm btn-setup" data-action="setupProject" title="${locale==='es'?'Generar AGENTS.md y docs/':'Generate AGENTS.md and docs/'}">${s.agents}</button>
     <button class="btn btn-sm" data-action="openSettings">${s.settings}</button>
     <button class="btn btn-sm" data-action="refresh">${s.refresh}</button>
   </div>

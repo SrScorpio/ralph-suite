@@ -4,7 +4,7 @@
   "config.engine.description": "Motor de IA para ejecutar las tareas (copilot, codex, claude, opencode).",
   "config.maxLoops.description": "N\u00famero m\u00e1ximo de tareas a ejecutar por sesi\u00f3n de auto-ejecuci\u00f3n antes de pausar.",
   "config.freshContext.description": "Abrir una nueva ventana de chat para cada tarea (contexto limpio, sin historial previo entre tareas). Recomendado: activado.",
-  "config.prdPath.description": "Ruta al archivo prd.json relativa a la ra\u00edz del workspace.",
+  "config.prdPath.description": "Ruta al archivo prd.json relativa a la ra\u00edz del workspace. Por defecto: docs/ralph/prd.json. Si no existe y hay un prd.json en la ra\u00edz, Ralph usa el archivo legado. Las rutas personalizadas se respetan y no pueden salir del workspace.",
   "config.memoriesPath.description": "Ruta al archivo de memorias del proyecto relativa a la ra\u00edz del workspace.",
   "config.guardrails.description": "Reglas inyectadas en cada prompt de tarea. El agente debe seguirlas siempre.",
   "config.boundaries.description": "Rutas que el agente nunca debe modificar (ej. legacy/**, *.lock).",

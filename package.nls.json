@@ -4,7 +4,7 @@
   "config.engine.description": "AI engine to use for task execution (copilot, codex, claude, opencode).",
   "config.maxLoops.description": "Maximum number of tasks to execute per auto-run session before pausing.",
   "config.freshContext.description": "Open a new chat window for each task (fresh context, no history bleeding between tasks). Recommended: true.",
-  "config.prdPath.description": "Path to prd.json relative to the workspace root.",
+  "config.prdPath.description": "Path to prd.json relative to the workspace root. Default: docs/ralph/prd.json. If that file is missing and a root prd.json exists, Ralph uses the legacy root file. Custom paths are honoured and cannot escape the workspace.",
   "config.memoriesPath.description": "Path to the project memories file relative to the workspace root.",
   "config.guardrails.description": "Rules injected into every task prompt. The agent must follow these at all times.",
   "config.boundaries.description": "Paths the agent must never touch (e.g. legacy/**, *.lock).",

@@ -35,6 +35,6 @@ describe('workspace root for Alfred / multi-root', () => {
 
 	it('does not follow prdPath outside the folder', () => {
 		const root = path.join(os.tmpdir(), 'ralph-root-safe');
-		assert.strictEqual(PrdManager.prdPath(root, '../outside.json'), path.join(root, 'prd.json'));
+		assert.strictEqual(PrdManager.prdPath(root, '../outside.json'), path.join(root, 'docs', 'ralph', 'prd.json'));
 	});
 });

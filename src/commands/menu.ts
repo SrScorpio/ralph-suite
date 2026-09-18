@@ -6,12 +6,12 @@
 
 import * as vscode from 'vscode';
 import { KanbanPanel } from '../kanbanPanel';
-import { PrdManager } from '../prdManager';
+import { DEFAULT_PRD_PATH, PrdManager } from '../prdManager';
 import { resolveWorkspaceRoot } from '../workspaceRoot';
 
 export async function showMenu(output: vscode.OutputChannel): Promise<void> {
 	const root = getWorkspaceRoot();
-	const prdPathSetting = vscode.workspace.getConfiguration('ralph-suite').get<string>('prdPath', 'prd.json');
+	const prdPathSetting = vscode.workspace.getConfiguration('ralph-suite').get<string>('prdPath', DEFAULT_PRD_PATH) ?? DEFAULT_PRD_PATH;
 	const prd  = root ? PrdManager.load(root, prdPathSetting) : null;
 	const done  = prd ? prd.issues.filter((i: any) => i.status === 'completed').length : 0;
 	const total = prd ? prd.issues.length : 0;
@@ -26,7 +26,7 @@ export async function showMenu(output: vscode.OutputChannel): Promise<void> {
 		{ label: '$(file)  Open PRD',             description: 'Open prd.json in editor' },
 		{ label: '$(book)  Memories',             description: 'Open .agent/memories.md' },
 		{ label: '$(sparkle)  Optimize Memory',   description: 'Compress and deduplicate memories.md' },
-		{ label: '$(tools)  Setup Project',       description: 'Generate/regenerate AGENTS.md and plans/' },
+		{ label: '$(tools)  Setup Project',       description: 'Generate/regenerate AGENTS.md and docs/' },
 		{ label: '$(gear)  Settings',             description: 'Configure Ralph Suite' },
 	];
 
@@ -63,7 +63,7 @@ export async function showMenu(output: vscode.OutputChannel): Promise<void> {
 }
 
 function getWorkspaceRoot(): string | undefined {
-	const prdPathSetting = vscode.workspace.getConfiguration('ralph-suite').get<string>('prdPath', 'prd.json');
+	const prdPathSetting = vscode.workspace.getConfiguration('ralph-suite').get<string>('prdPath', DEFAULT_PRD_PATH) ?? DEFAULT_PRD_PATH;
 	return resolveWorkspaceRoot(
 		vscode.workspace.workspaceFolders?.map(folder => folder.uri.fsPath),
 		prdPathSetting,

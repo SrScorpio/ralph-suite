@@ -108,7 +108,7 @@ describe('PRD normalization', () => {
 
 		assert.ok(fs.existsSync(path.join(customDir, 'custom-prd.json')));
 		assert.strictEqual(PrdManager.load(tmpDir, 'data/custom-prd.json')!.project, 'custom');
-		assert.strictEqual(PrdManager.prdPath(tmpDir, '../outside.json'), path.join(tmpDir, 'prd.json'));
+		assert.strictEqual(PrdManager.prdPath(tmpDir, '../outside.json'), path.join(tmpDir, 'docs', 'ralph', 'prd.json'));
 	});
 });
 

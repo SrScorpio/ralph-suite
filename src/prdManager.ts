@@ -2,6 +2,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { RalphStateManager, safeTaskId } from './stateManager';
 
+export const DEFAULT_PRD_PATH = 'docs/ralph/prd.json';
+export const LEGACY_PRD_PATH = 'prd.json';
+
+export function isDefaultPrdPathSetting(configuredPath?: string): boolean {
+	const normalized = (configuredPath ?? '').trim().replace(/\\/g, '/');
+	return normalized === '' || normalized === DEFAULT_PRD_PATH;
+}
+
 export interface Issue {
 	id: string;
 	title: string;
@@ -105,14 +113,26 @@ function normalizeItem(raw: RawItem, index: number, usedIds: Set<string>): Issue
 }
 
 export class PrdManager {
-	static prdPath(root: string, configuredPath = 'prd.json'): string {
+	static prdPath(
+		root: string,
+		configuredPath = DEFAULT_PRD_PATH,
+		exists: (candidate: string) => boolean = (candidate) => fs.existsSync(candidate),
+	): string {
 		const rootPath = path.resolve(root);
+		const safeFallback = path.join(rootPath, DEFAULT_PRD_PATH);
+		if (isDefaultPrdPathSetting(configuredPath)) {
+			const modern = path.join(rootPath, DEFAULT_PRD_PATH);
+			const legacy = path.join(rootPath, LEGACY_PRD_PATH);
+			if (exists(modern)) { return modern; }
+			if (exists(legacy)) { return legacy; }
+			return modern;
+		}
 		const target = path.isAbsolute(configuredPath)
 			? configuredPath
-			: path.join(rootPath, configuredPath || 'prd.json');
+			: path.join(rootPath, configuredPath);
 		const resolved = path.resolve(target);
 		if (resolved !== rootPath && !resolved.startsWith(rootPath + path.sep)) {
-			return path.join(rootPath, 'prd.json');
+			return safeFallback;
 		}
 		return resolved;
 	}
@@ -130,7 +150,7 @@ export class PrdManager {
 		raw.issues = items;
 	}
 
-	static loadRaw(root: string, configuredPath = 'prd.json'): any | null {
+	static loadRaw(root: string, configuredPath = DEFAULT_PRD_PATH): any | null {
 		const prdPath = this.prdPath(root, configuredPath);
 		if (!fs.existsSync(prdPath)) { return null; }
 		try {
@@ -141,15 +161,16 @@ export class PrdManager {
 		}
 	}
 
-	static saveRaw(root: string, raw: any, configuredPath = 'prd.json'): void {
+	static saveRaw(root: string, raw: any, configuredPath = DEFAULT_PRD_PATH): void {
 		const prdPath = this.prdPath(root, configuredPath);
 		const dir = path.dirname(prdPath);
+		if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
 		const tmpPath = path.join(dir, `.prd.json.${process.pid}.${Date.now()}.tmp`);
 		fs.writeFileSync(tmpPath, JSON.stringify(raw, null, 2), 'utf-8');
 		fs.renameSync(tmpPath, prdPath);
 	}
 
-	static mutateRaw(root: string, mutate: (raw: any, items: any[]) => boolean | void, configuredPath = 'prd.json'): boolean {
+	static mutateRaw(root: string, mutate: (raw: any, items: any[]) => boolean | void, configuredPath = DEFAULT_PRD_PATH): boolean {
 		const raw = this.loadRaw(root, configuredPath);
 		if (!raw) { return false; }
 		const items = this.rawItems(raw);
@@ -160,7 +181,7 @@ export class PrdManager {
 		return true;
 	}
 
-	static load(root: string, configuredPath = 'prd.json'): Prd | null {
+	static load(root: string, configuredPath = DEFAULT_PRD_PATH): Prd | null {
 		const prdPath = this.prdPath(root, configuredPath);
 		if (!fs.existsSync(prdPath)) { return null; }
 		try {

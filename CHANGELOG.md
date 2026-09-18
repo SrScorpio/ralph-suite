@@ -9,9 +9,12 @@ All notable changes to Ralph Suite are documented here.
 ### Added
 - Public host-extension contract for Alfred Dev: documented command IDs (`openKanban`, `runTask`, `startRunner`, `stopRunner`). `ralph-suite.syncIssue` is still not contributed.
 - Multi-root workspace root: commands prefer the folder that contains `prd.json` (honours `ralph-suite.prdPath`, no path traversal) instead of always using `workspaceFolders[0]`.
+- Default project layout for Init / Setup: `AGENTS.md` at root, human docs under `docs/project/` and `docs/adr/`, machine backlog at `docs/ralph/prd.json`. Optional `docs/ralph/IMPLEMENTATION_PLAN.md` does not replace the PRD. Runtime stays in `.ralph/` (`progress.md` belongs there, never under `docs/`).
 
 ### Changed
 - README documents the optional relationship with Alfred Dev (`SrScorpio/alfred-dev-vscode`): GitHub Issues remain Alfred's source of truth; `prd.json` remains Ralph's local backlog.
+- Default `ralph-suite.prdPath` is `docs/ralph/prd.json`. If that file is missing and a root `prd.json` exists, Ralph keeps using the legacy root file (no copy/merge of two backlogs). Custom `prdPath` is still honoured and cannot escape the workspace.
+- Setup Project command title, Kanban copy and generated `AGENTS.md` read list now point at `docs/`, not `plans/` as the primary convention.
 
 ## [1.9.1] - 2026-08-07
 
