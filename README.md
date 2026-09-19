@@ -7,10 +7,10 @@ Inspired by the [RALPH Wiggum technique](https://github.com/badlogic/lemmy/issue
 
 ## Install (GitHub Releases, no Marketplace)
 
-Ralph Suite is **not** on the Visual Studio Marketplace. Install the VSIX from [GitHub Releases](https://github.com/SrScorpio/ralph-suite/releases). The published asset is `ralph-suite-1.10.0.vsix`; the `syncIssue` and runner changes described under `[Unreleased]` are still only in the working tree and pending publication.
+Ralph Suite is **not** on the Visual Studio Marketplace. Install the VSIX from [GitHub Releases](https://github.com/SrScorpio/ralph-suite/releases). The published asset is `ralph-suite-1.11.0.vsix`.
 
 1. Open the latest [GitHub Release](https://github.com/SrScorpio/ralph-suite/releases)
-2. Download `ralph-suite-1.10.0.vsix`
+2. Download `ralph-suite-1.11.0.vsix`
 3. VS Code → Extensions → ⋯ → **Install from VSIX…** → select the file
 
 To build from source instead:
@@ -27,7 +27,7 @@ npm run compile
 
 # 4. Package as .vsix
 npm run package
-# → creates ralph-suite-1.10.0.vsix
+# → creates ralph-suite-1.11.0.vsix
 
 # 5. Install in VS Code
 # Extensions panel → ⋯ → Install from VSIX → select the file
@@ -259,7 +259,7 @@ Configure in `Ctrl+,` → Ralph Suite:
 
 **⬆ GitHub** — sends a prompt to Copilot Chat that creates GitHub Issues for all pending issues via MCP, with labels, acceptance criteria checklist, and a `Ralph Suite ID: ISSUE-NNN` reference in the body.
 
-**⬇ Sync** — remains a chat prompt for bulk/manual synchronisation that reads closed/assigned GitHub Issues and writes the corresponding `.ralph/task-*-status` files back locally, syncing the board. In the current working tree, `ralph-suite.syncIssue` is also a public command for one explicit GitHub issue/status transition. It requires workspace trust, accepts issue numbers `1..999999`, statuses `todo`, `inprogress`, `blocked` or `completed`, and an optional workspace root that must be allowlisted. The command matches exactly one local task through the labels `github:#N` or `owner/repo#N`. It never infers `ISSUE-00N` from GitHub `#N`, never modifies `prd.json`, and writes only `.ralph/task-<local-id>-status`. The command is implemented in the working tree and is pending publication; the published 1.10.0 asset does not contain it.
+**⬇ Sync** — remains a chat prompt for bulk/manual synchronisation that reads closed/assigned GitHub Issues and writes the corresponding `.ralph/task-*-status` files back locally, syncing the board. `ralph-suite.syncIssue` is also a public command for one explicit GitHub issue/status transition. It requires workspace trust, accepts issue numbers `1..999999`, statuses `todo`, `inprogress`, `blocked` or `completed`, and an optional workspace root that must be allowlisted. The command matches exactly one local task through the labels `github:#N` or `owner/repo#N`. It never infers `ISSUE-00N` from GitHub `#N`, never modifies `prd.json`, and writes only `.ralph/task-<local-id>-status`. The published 1.11.0 asset contains it.
 
 Requires the GitHub MCP connector enabled in VSCode.
 
@@ -333,4 +333,4 @@ If you have a Plan agent markdown file (from Copilot's `/plan` command):
 
 ## Version
 
-Current published version: **1.10.0** — see [CHANGELOG.md](CHANGELOG.md) for full history. Distributed from GitHub Releases only (no Marketplace). The current working tree contains unreleased changes pending publication.
+Current published version: **1.11.0** — see [CHANGELOG.md](CHANGELOG.md) for full history. Distributed from GitHub Releases only (no Marketplace).
