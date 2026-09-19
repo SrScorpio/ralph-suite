@@ -16,7 +16,7 @@ All notable changes to Ralph Suite are documented here.
 - ADR-016 keeps parallel dispatch out of Alfred: no N× `runTask` calls are launched. A future scheduler, if needed, belongs to Ralph's runner.
 
 ### Verified
-- QA and security gates approved; 132 tests pass in the current working tree.
+- QA and security gates approved; 133 tests pass in the current working tree.
 - These changes are pending publication. They are not a new release and are not included in the published `1.10.0` asset.
 
 ## [1.10.0] - 2026-09-18
