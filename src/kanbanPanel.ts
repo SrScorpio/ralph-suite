@@ -8,9 +8,17 @@ import { buildPushPrompt, buildSyncPrompt } from './kanban/gitHubSync';
 import { buildContextRefreshPrompt } from './kanban/contextRefresh';
 import { importPlanToPrd, generateNextId, buildAddFromChatPrompt } from './kanban/planImport';
 import { sendToChat } from './chatLauncher';
+import { pendingTasksMessage } from './commands/task';
 import { safeMessageId, isBoardStatus, cleanText, cleanTextArray, cleanPriority, cleanIssueFields, getNonce } from './boardSanitizers';
 import { computeHealthScore } from './healthScore';
 import { detectLocale } from './i18n';
+import { requireWorkspaceTrust } from './workspaceTrust';
+import { BoardScope, defaultBoardScope, listRalphFolders, resolveFolderIndex } from './workspaceFolders';
+import { buildAnalyzeExistingProjectPrompt } from './kanban/analyzeProject';
+
+export function shouldCompleteTask(summary: string | undefined): boolean {
+	return summary !== undefined;
+}
 
 export class KanbanPanel {
 	public static readonly viewType = 'ralph-suite.kanban';
@@ -26,12 +34,18 @@ export class KanbanPanel {
 	private completedSinceOptimize = 0;  // tracks tasks completed since last memory optimization
 	private disposed   = false;
 	private runnerTimer: ReturnType<typeof setTimeout> | null = null;
+	private runnerAbortController: AbortController | null = null;
 	private currentView: 'board' | 'epic' | 'history' = 'board';
+	private boardScope: BoardScope = 'folder';
+	private folders = listRalphFolders(vscode.workspace.workspaceFolders?.map(folder => folder.uri.fsPath), this.prdPathSetting());
 
 
 	private constructor(panel: vscode.WebviewPanel, root: string) {
 		this.panel = panel;
 		this.root  = root;
+		this.folders = listRalphFolders(vscode.workspace.workspaceFolders?.map(folder => folder.uri.fsPath), this.prdPathSetting());
+		const inspect = vscode.workspace.getConfiguration('ralph-suite').inspect<BoardScope>('boardScope');
+		this.boardScope = inspect?.workspaceValue ?? inspect?.globalValue ?? defaultBoardScope(this.folders.length);
 		this.panel.webview.options = { enableScripts: true };
 		this.panel.onDidDispose(() => {
 			// Clear current FIRST so createOrShow creates a fresh panel
@@ -51,35 +65,35 @@ export class KanbanPanel {
 	}
 
 	private startWatchers() {
-		const watch = (pattern: vscode.RelativePattern, cb: () => void) => {
-			const w = vscode.workspace.createFileSystemWatcher(pattern);
+		const watch = (root: string, pattern: string, cb: () => void) => {
+			const w = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root, pattern));
 			w.onDidChange(cb); w.onDidCreate(cb); w.onDidDelete(cb);
 			this.watchers.push(w);
 		};
-		watch(new vscode.RelativePattern(this.root, '.ralph/task-*-status'), () => {
-			KanbanPanel.output?.appendLine('[Ralph] Status changed — refreshing');
-			this.render();
-			if (this.autoRun) {
-				// Check if a task just completed and if memory optimization is due
-				this.checkAutoOptimize().then(() => {
-					this.scheduleNextTask(3000);
-				});
-			}
-		});
-		// Agent writes -note file → process it into log.json + memories, then delete it
-		watch(new vscode.RelativePattern(this.root, '.ralph/task-*-note'), () => {
-			const ralphDir = path.join(this.root, '.ralph');
-			if (!fs.existsSync(ralphDir)) { return; }
-			for (const f of fs.readdirSync(ralphDir)) {
-				const m = f.match(/^task-(.+)-note$/);
-				if (!m) { continue; }
-				RalphStateManager.processNoteFile(this.root, m[1]);
-				KanbanPanel.output?.appendLine(`[Ralph] Note captured for ${m[1]}`);
-			}
-			this.render();
-		});
-		watch(new vscode.RelativePattern(this.root, prdWatchPattern(this.root, this.prdPathSetting())), () => this.render());
-		watch(new vscode.RelativePattern(this.root, path.relative(this.root, RalphStateManager.memoriesPath(this.root, this.memoriesPathSetting())) || '.agent/memories.md'), () => this.render());
+		const folders = this.folders.length ? this.folders : [{ index: 0, root: this.root, name: '', prdPath: '', hasPrd: false }];
+		for (const folder of folders) {
+			watch(folder.root, '.ralph/task-*-status', () => {
+				KanbanPanel.output?.appendLine('[Ralph] Status changed — refreshing');
+				this.render();
+				if (this.autoRun) {
+					this.checkAutoOptimize().then(() => { this.scheduleNextTask(3000); });
+				}
+			});
+			watch(folder.root, '.ralph/task-*-note', () => {
+				const ralphDir = path.join(folder.root, '.ralph');
+				if (!fs.existsSync(ralphDir)) { return; }
+				for (const f of fs.readdirSync(ralphDir)) {
+					const m = f.match(/^task-(.+)-note$/);
+					if (!m) { continue; }
+					RalphStateManager.processNoteFile(folder.root, m[1], this.memoriesPathSetting());
+					KanbanPanel.output?.appendLine(`[Ralph] Note captured for ${m[1]}`);
+				}
+				this.render();
+			});
+			watch(folder.root, prdWatchPattern(folder.root, this.prdPathSetting()), () => this.render());
+			const memRel = path.relative(folder.root, RalphStateManager.memoriesPath(folder.root, this.memoriesPathSetting())) || '.agent/memories.md';
+			watch(folder.root, memRel.replace(/\\/g, '/'), () => this.render());
+		}
 	}
 
 	static createOrShow(extensionUri: vscode.Uri, root: string, output: vscode.OutputChannel) {
@@ -111,12 +125,18 @@ export class KanbanPanel {
 	}
 
 	// Send a message to the webview from outside (e.g. quick menu)
-	static sendMessage(type: string, id?: string) {
+	static sendMessage(type: string, id?: string): boolean {
 		if (KanbanPanel.current && !KanbanPanel.current.disposed) {
 			KanbanPanel.current.handleMessage({ type, id }).catch(e => {
 				KanbanPanel.output?.appendLine(`[Board] sendMessage error for ${type}: ${e}`);
 			});
+			return true;
 		}
+		return false;
+	}
+
+	static runnerSignal(): AbortSignal | undefined {
+		return KanbanPanel.current?.runnerAbortController?.signal;
 	}
 
 	private shellLoaded = false;
@@ -124,7 +144,7 @@ export class KanbanPanel {
 	private render() {
 		if (this.disposed) { return; }
 		try {
-			const prd      = PrdManager.load(this.root, this.prdPathSetting());
+			const prd      = this.aggregatedPrd();
 			const memories = this.loadFile(RalphStateManager.memoriesPath(this.root, this.memoriesPathSetting()));
 			const logs     = this.loadLogs();
 			const cfg      = this.getBoardConfig();
@@ -152,7 +172,7 @@ export class KanbanPanel {
 	private sendUpdate(prd: any, memories: string | null, logs: any, cfg: BoardConfig) {
 		if (this.disposed) { return; }
 		try {
-			const statuses = RalphStateManager.getAllStatuses(this.root);
+			const statuses = this.mergedStatuses();
 			const html = getBoardContent(prd, memories, logs, cfg, statuses);
 			this.panel.webview.postMessage({ type: 'update', data: { html } });
 		} catch (e: any) {
@@ -166,11 +186,11 @@ export class KanbanPanel {
 	private getBoardConfig(): BoardConfig {
 		const s = vscode.workspace.getConfiguration('ralph-suite');
 		// Compute health score (ADR-005) from current prd + statuses + logs
-		const prd = PrdManager.load(this.root, this.prdPathSetting());
+		const prd = this.aggregatedPrd();
 		let health;
 		if (prd) {
-			const statuses = RalphStateManager.getAllStatuses(this.root);
-			const logs = RalphStateManager.getAllLogs(this.root);
+			const statuses = this.mergedStatuses();
+			const logs = Object.values(this.loadLogs());
 			health = computeHealthScore(prd, statuses, logs);
 		}
 		return {
@@ -181,6 +201,8 @@ export class KanbanPanel {
 			view:       this.currentView,
 			health,
 			locale:     detectLocale(),
+			boardScope: this.boardScope,
+			showScopeSwitch: this.folders.length > 1,
 		};
 	}
 
@@ -189,10 +211,60 @@ export class KanbanPanel {
 		return fs.readFileSync(p, 'utf-8').trim() || null;
 	}
 
+	private scopedFolders() {
+		this.folders = listRalphFolders(vscode.workspace.workspaceFolders?.map(folder => folder.uri.fsPath), this.prdPathSetting());
+		if (this.boardScope !== 'workspace' && this.folders.length > 1) {
+			return this.folders.filter(folder => folder.root === this.root);
+		}
+		return this.folders.length ? this.folders : [{ index: 0, root: this.root, name: 'folder', prdPath: this.prdPathSetting(), hasPrd: false }];
+	}
+
 	private loadLogs(): Record<string, TaskLog> {
 		const map: Record<string, TaskLog> = {};
-		for (const l of RalphStateManager.getAllLogs(this.root)) { map[l.id] = l; }
+		for (const folder of this.scopedFolders()) {
+			for (const l of RalphStateManager.getAllLogs(folder.root)) {
+				map[`${folder.index}:${l.id}`] = l;
+				if (!(l.id in map)) { map[l.id] = l; }
+			}
+		}
 		return map;
+	}
+
+	private mergedStatuses(): Record<string, string> {
+		const statuses: Record<string, string> = {};
+		for (const folder of this.scopedFolders()) {
+			for (const [id, status] of Object.entries(RalphStateManager.getAllStatuses(folder.root))) {
+				statuses[`${folder.index}:${id}`] = status;
+				if (!(id in statuses)) { statuses[id] = status; }
+			}
+		}
+		return statuses;
+	}
+
+	private folderFromMessage(msg: any) {
+		if (this.boardScope === 'folder') {
+			return this.folders.find(folder => folder.root === this.root) ?? this.folders[0];
+		}
+		const index = resolveFolderIndex(typeof msg?.folderIndex === 'string' && msg.folderIndex !== '' ? Number(msg.folderIndex) : msg?.folderIndex, this.folders.length);
+		if (index !== null) { return this.folders[index]; }
+		return this.folders.find(folder => folder.root === this.root) ?? this.folders[0];
+	}
+
+	private aggregatedPrd(): Prd | null {
+		this.folders = listRalphFolders(vscode.workspace.workspaceFolders?.map(folder => folder.uri.fsPath), this.prdPathSetting());
+		const scoped = this.boardScope === 'workspace' || this.folders.length <= 1
+			? this.folders
+			: this.folders.filter(folder => folder.root === this.root);
+		const loaded = scoped
+			.map(folder => ({ folder, prd: PrdManager.load(folder.root, this.prdPathSetting()) }))
+			.filter((entry): entry is { folder: { index: number; root: string; name: string; prdPath: string; hasPrd: boolean }; prd: Prd } => !!entry.prd);
+		if (!loaded.length) { return null; }
+		return {
+			project: this.boardScope === 'workspace' && loaded.length > 1 ? 'Workspace' : loaded[0].prd.project,
+			description: loaded.map(entry => entry.prd.project).join(' + '),
+			version: loaded[0].prd.version,
+			issues: loaded.flatMap(entry => entry.prd.issues.map(issue => ({ ...issue, folderIndex: entry.folder.index, folderName: entry.folder.name }))),
+		};
 	}
 
 	private prdPathSetting(): string {
@@ -211,7 +283,7 @@ export class KanbanPanel {
 		if (optimizeEvery <= 0) { return; }
 
 		// Count completed tasks
-		const prd = PrdManager.load(this.root, this.prdPathSetting());
+		const prd = this.aggregatedPrd();
 		if (!prd) { return; }
 		const statuses   = RalphStateManager.getAllStatuses(this.root);
 		const totalDone  = prd.issues.filter(i => (statuses[i.id] ?? 'todo') === 'completed').length;
@@ -233,6 +305,7 @@ export class KanbanPanel {
 		const maxLoops = vscode.workspace.getConfiguration('ralph-suite').get<number>('maxLoops', 5);
 		this.autoRun   = true;
 		this.loopCount = 0;
+		this.runnerAbortController = new AbortController();
 		KanbanPanel.output?.appendLine(`[Runner] Started — max ${maxLoops} tasks`);
 		vscode.window.showInformationMessage(`Ralph runner started (max ${maxLoops} tasks)`);
 		this.render();
@@ -241,6 +314,8 @@ export class KanbanPanel {
 
 	private stopRunner() {
 		this.autoRun = false;
+		this.runnerAbortController?.abort();
+		this.runnerAbortController = null;
 		if (this.runnerTimer) { clearTimeout(this.runnerTimer); this.runnerTimer = null; }
 		KanbanPanel.output?.appendLine('[Runner] Stopped');
 		this.render();
@@ -259,38 +334,55 @@ export class KanbanPanel {
 			this.stopRunner();
 			return;
 		}
-		const prd = PrdManager.load(this.root, this.prdPathSetting());
+		const prd = this.aggregatedPrd();
 		if (!prd) { this.stopRunner(); return; }
 
-		const statuses = RalphStateManager.getAllStatuses(this.root);
-		const inProgress = prd.issues.find(i => statuses[i.id] === 'inprogress');
+		const inProgress = prd.issues.find(i => i.status === 'inprogress');
 		if (inProgress) {
 			KanbanPanel.output?.appendLine(`[Runner] ${inProgress.id} still in progress — waiting`);
 			return;
 		}
 		const next = PrdManager.nextPending(prd, this.root);
 		if (!next) {
-			vscode.window.showInformationMessage('Ralph: all tasks completed!');
+			vscode.window.showInformationMessage(pendingTasksMessage(
+				prd.issues,
+				'Ralph: all tasks completed!',
+				'Ralph: no hay tareas elegibles; quedan tareas bloqueadas o fallidas.',
+			));
 			this.stopRunner();
 			return;
 		}
 		this.loopCount++;
 		KanbanPanel.output?.appendLine(`[Runner] Loop ${this.loopCount}/${maxLoops} → ${next.id}`);
-		await vscode.commands.executeCommand('ralph-suite.runTask', next.id);
+		await vscode.commands.executeCommand('ralph-suite.runTask', next.id, this.folders.find(folder => folder.index === next.folderIndex)?.root);
 	}
 
 	// ── Message handler ───────────────────────────────────────────────────────
 
 	private async handleMessage(msg: any) {
+		const mutatingTypes = new Set([
+			'runTask', 'markDone', 'moveCard', 'reorderCard', 'addNote', 'startRunner', 'stopRunner',
+			'pushToGitHub', 'syncFromGitHub', 'showAddIssue', 'editIssue', 'addIssue', 'addFromChat',
+			'importPlan', 'optimizeMemory', 'setupProject', 'openMemories', 'initProject', 'analyzeProject', 'setBoardScope', 'contextRefresh', 'resetTask',
+		]);
+		if (mutatingTypes.has(msg.type) && !requireWorkspaceTrust(`realizar ${msg.type}`)) { return; }
 		switch (msg.type) {
 
 			case 'runTask':
 				{
 					const id = safeMessageId(msg.id);
-					if (!id) { break; }
-					await vscode.commands.executeCommand('ralph-suite.runTask', id);
+					const folder = this.folderFromMessage(msg);
+					if (!id || !folder) { break; }
+					await vscode.commands.executeCommand('ralph-suite.runTask', id, folder.root);
 				}
 				break;
+
+			case 'resetTask': {
+				const id = safeMessageId(msg.id);
+				const folder = this.folderFromMessage(msg);
+				if (id && folder) { RalphStateManager.reset(folder.root, id); this.render(); }
+				break;
+			}
 
 			case 'markDone': {
 				const id = safeMessageId(msg.id);
@@ -301,7 +393,8 @@ export class KanbanPanel {
 					placeHolder: 'e.g. Created runpod/requirements.txt with pinned versions',
 					ignoreFocusOut: true
 				});
-				RalphStateManager.setCompleted(this.root, id, summary ?? undefined);
+				if (!shouldCompleteTask(summary)) { break; }
+				RalphStateManager.setCompleted((this.folderFromMessage(msg)?.root ?? this.root), id, summary || undefined, undefined, this.memoriesPathSetting());
 				this.render();
 				if (this.autoRun) { this.scheduleNextTask(2000); }
 				break;
@@ -319,13 +412,15 @@ export class KanbanPanel {
 						placeHolder: 'What was done?',
 						ignoreFocusOut: true
 					});
-					RalphStateManager.setCompleted(this.root, id, summary ?? undefined);
+					if (!shouldCompleteTask(summary)) { break; }
+					RalphStateManager.setCompleted((this.folderFromMessage(msg)?.root ?? this.root), id, summary || undefined, undefined, this.memoriesPathSetting());
 				} else if (status === 'inprogress') {
-					const prdIP = PrdManager.load(this.root, this.prdPathSetting());
+					const folder = this.folderFromMessage(msg);
+					const prdIP = PrdManager.load(folder?.root ?? this.root, this.prdPathSetting());
 					const titleIP = prdIP?.issues.find(i => i.id === id)?.title ?? '';
-					RalphStateManager.setInProgress(this.root, id, titleIP);
+					RalphStateManager.setInProgress(folder?.root ?? this.root, id, titleIP);
 				} else if (status === 'todo') {
-					RalphStateManager.reset(this.root, id);
+					RalphStateManager.reset(this.folderFromMessage(msg)?.root ?? this.root, id);
 				}
 				this.render();
 				break;
@@ -337,7 +432,7 @@ export class KanbanPanel {
 				const before = msg.before === true;
 				if (!id || !targetId) { break; }
 				try {
-					const changed = PrdManager.mutateRaw(this.root, (_raw, items) => {
+					const changed = PrdManager.mutateRaw(this.folderFromMessage(msg)?.root ?? this.root, (_raw, items) => {
 						const fromIdx = items.findIndex((i: any) => i.id === id);
 						const toIdx   = items.findIndex((i: any) => i.id === targetId);
 						if (fromIdx === -1 || toIdx === -1) { return false; }
@@ -366,13 +461,13 @@ export class KanbanPanel {
 				});
 				if (!note) { break; }
 				// Load log, inject note, save, append to memories
-				const lp = RalphStateManager.logPath(this.root, id);
+				const lp = RalphStateManager.logPath(this.folderFromMessage(msg)?.root ?? this.root, id);
 				if (fs.existsSync(lp)) {
 					try {
 						const log = JSON.parse(fs.readFileSync(lp, 'utf-8'));
 						log.note = note;
 						fs.writeFileSync(lp, JSON.stringify(log, null, 2), 'utf-8');
-						RalphStateManager.appendMemory(this.root, log);
+						RalphStateManager.appendMemory(this.folderFromMessage(msg)?.root ?? this.root, log, this.memoriesPathSetting());
 					} catch { /**/ }
 				}
 				this.render();
@@ -392,7 +487,7 @@ export class KanbanPanel {
 			case 'pushToGitHub': {
 				const prd = PrdManager.load(this.root, this.prdPathSetting());
 				if (!prd) { vscode.window.showErrorMessage('No prd.json found.'); break; }
-				const statuses = RalphStateManager.getAllStatuses(this.root);
+				const statuses = this.mergedStatuses();
 				const pending = prd.issues.filter(i => {
 					const s = statuses[i.id] ?? 'todo';
 					return s === 'todo' || s === 'blocked';
@@ -451,7 +546,7 @@ export class KanbanPanel {
 				if (!id || !fields) { break; }
 				if (!fields.title) { break; }
 				try {
-					const changed = PrdManager.mutateRaw(this.root, (_raw, items) => {
+					const changed = PrdManager.mutateRaw(this.folderFromMessage(msg)?.root ?? this.root, (_raw, items) => {
 						const idx = items.findIndex((i: any) => i.id === id);
 						if (idx === -1) { return false; }
 						// Merge allowlisted fields only.
@@ -474,7 +569,7 @@ export class KanbanPanel {
 
 				let newId = '';
 				try {
-					const changed = PrdManager.mutateRaw(this.root, (_raw, items) => {
+					const changed = PrdManager.mutateRaw(this.folderFromMessage(msg)?.root ?? this.root, (_raw, items) => {
 						// Generate next ID based on existing format
 						const existingIds: string[] = items.map((i: any) => i.id ?? '');
 						newId = generateNextId(existingIds);
@@ -585,11 +680,8 @@ export class KanbanPanel {
 				break;
 
 			case 'openMemories': {
-				const p = path.join(this.root, '.agent', 'memories.md');
-				RalphStateManager.ensure(this.root);
-				if (!fs.existsSync(p)) {
-					fs.writeFileSync(p, '# Project Memories\n\n> Edit freely — committed to git.\n\n', 'utf-8');
-				}
+				const p = RalphStateManager.memoriesPath(this.root, this.memoriesPathSetting());
+				RalphStateManager.initMemories(this.root, '', this.memoriesPathSetting());
 				const doc = await vscode.workspace.openTextDocument(p);
 				await vscode.window.showTextDocument(doc);
 				break;
@@ -612,6 +704,18 @@ export class KanbanPanel {
 				KanbanPanel.output?.appendLine('[Board] initProject button clicked');
 				await vscode.commands.executeCommand('ralph-suite.initProject');
 				KanbanPanel.output?.appendLine('[Board] initProject command returned');
+				break;
+
+			case 'analyzeProject':
+				await vscode.commands.executeCommand('ralph-suite.analyzeProject');
+				break;
+
+			case 'setBoardScope':
+				if (msg.id === 'folder' || msg.id === 'workspace') {
+					this.boardScope = msg.id;
+					void vscode.workspace.getConfiguration('ralph-suite').update('boardScope', msg.id, vscode.ConfigurationTarget.Workspace);
+					this.render();
+				}
 				break;
 
 			case 'refresh':

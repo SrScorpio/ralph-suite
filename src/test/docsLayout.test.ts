@@ -2,11 +2,13 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as vscode from 'vscode';
 import { DEFAULT_PRD_PATH, LEGACY_PRD_PATH, PrdManager, prdWatchPattern } from '../prdManager';
 import { resolveWorkspaceRoot } from '../workspaceRoot';
 import {
 	buildAgentsMd,
 	buildArquitecturaMd,
+	buildCopilotInstructions,
 	buildDecisionesMd,
 	buildGeneratedProjectFiles,
 	buildImplementationPlanMd,
@@ -14,6 +16,7 @@ import {
 	buildSeguridadMd,
 	buildStatusMd,
 } from '../agentsMdBuilders';
+import { buildPrompt, RalphExecutionContext } from '../promptBuilders';
 
 function makeTmp(): string {
 	return fs.mkdtempSync(path.join(os.tmpdir(), 'ralph-docs-layout-'));
@@ -177,6 +180,111 @@ describe('ISSUE-003 docs/ layout and docs/ralph/prd.json', () => {
 		const beforeSection = before.slice(0, before.indexOf('## Completion protocol'));
 		assert.ok(!beforeSection.includes('plans/'), 'plans/ must not be the primary read list');
 		assert.ok(!md.includes('docs/progress.md'));
+	});
+
+	it('generated instructions distinguish collaborative references from local Ralph IDs', () => {
+		const md = buildAgentsMd(
+			'Senior Software Engineer',
+			'TypeScript',
+			'Demo',
+			[],
+			[],
+			'2026-09-18',
+		);
+		const copilot = buildCopilotInstructions('Demo', 'TypeScript');
+		const init = buildInitPromptText('ship a plugin', tmpDir, [], []);
+		const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
+		const guardrails = packageJson.contributes.configuration.properties['ralph-suite.guardrails'].default as string[];
+
+		assert.ok(md.includes('owner/repo#N'));
+		assert.ok(md.includes('syncIssue'));
+		assert.ok(md.includes('github:#N'));
+		assert.ok(md.includes('explicit Ralph task ID and workspace root'));
+		assert.ok(md.includes('Ad hoc, analysis, review, documentation, and handoff requests do not require an ID'));
+		assert.ok(md.includes('Only authorized commits'));
+		assert.ok(copilot.includes('owner/repo#N'));
+		assert.ok(copilot.includes('syncIssue'));
+		assert.ok(copilot.includes('github:#N'));
+		assert.ok(copilot.includes('Commits only when explicitly authorized'));
+		assert.ok(init.includes('Use the backlog ID exactly as provided'));
+		assert.ok(init.includes('syncIssue'));
+		assert.ok(init.includes('github:#N'));
+		assert.ok(init.includes('Do not infer a GitHub issue number from a local ID'));
+		assert.ok(!init.includes('add git commit after each feature issue'));
+		assert.ok(!guardrails.some(rule => rule.includes('When a task is finished, write the completion signal')));
+		assert.ok(guardrails.some(rule => rule.includes('Only authorized commits')));
+	});
+
+	it('buildPrompt gates completion signals on explicit Ralph context and quality checks', () => {
+		const task = {
+			id: 'LOCAL-42',
+			title: 'Prompt regression',
+			description: 'Verify completion instructions',
+			priority: 'P1',
+			acceptanceCriteria: [],
+		};
+		const context: RalphExecutionContext = {
+			kind: 'ralph-execution',
+			localTaskId: task.id,
+			workspaceRoot: tmpDir,
+		};
+		const previousFolders = (vscode.workspace as any).workspaceFolders;
+		(vscode.workspace as any).workspaceFolders = [{ uri: { fsPath: tmpDir } }];
+		const prompt = buildPrompt(task, {}, context);
+
+		assert.ok(prompt.includes('COMPLETION SIGNALS'));
+		assert.ok(prompt.includes('Use the local backlog ID exactly as provided: LOCAL-42'));
+		assert.ok(prompt.includes('only after the full task scope, verification commands, and quality gates are complete'));
+		assert.ok(prompt.includes('Never write completion signals during rejection, blocking, review, or partial handoff'));
+		assert.ok(prompt.includes('overwrite, not append'));
+		assert.ok(prompt.includes('NOTA: <one line summary>'));
+		assert.ok(!prompt.includes('Do NOT skip either step'));
+
+		const invalidContexts: unknown[] = [
+			undefined,
+			{ kind: 'ad-hoc', localTaskId: task.id, workspaceRoot: tmpDir },
+			{ kind: 'ralph-execution', localTaskId: 'OTHER-42', workspaceRoot: tmpDir },
+			{ kind: 'ralph-execution', localTaskId: '', workspaceRoot: tmpDir },
+			{ kind: 'ralph-execution', localTaskId: '   ', workspaceRoot: tmpDir },
+			{ kind: 'ralph-execution', localTaskId: task.id, workspaceRoot: '   ' },
+		];
+
+		try {
+			for (const context of invalidContexts) {
+				const invalidPrompt = buildPrompt(task, {}, context);
+				assert.ok(!invalidPrompt.includes('.ralph/'));
+				assert.ok(!invalidPrompt.includes('completed'));
+				assert.ok(!invalidPrompt.includes('NOTA:'));
+				assert.ok(!invalidPrompt.includes('COMPLETION SIGNALS'));
+			}
+		} finally {
+			(vscode.workspace as any).workspaceFolders = previousFolders;
+		}
+	});
+
+	it('rejects Ralph execution contexts outside canonical workspace folders', () => {
+		const task = {
+			id: 'LOCAL-43',
+			title: 'Workspace boundary',
+			description: 'Check execution context boundaries',
+			priority: 'P1',
+			acceptanceCriteria: [],
+		};
+		const previousFolders = (vscode.workspace as any).workspaceFolders;
+		const outside = makeTmp();
+		(vscode.workspace as any).workspaceFolders = [{ uri: { fsPath: tmpDir } }];
+		try {
+			const prompt = buildPrompt(task, {}, {
+				kind: 'ralph-execution',
+				localTaskId: task.id,
+				workspaceRoot: outside,
+			});
+			assert.ok(!prompt.includes('COMPLETION SIGNALS'));
+			assert.ok(!prompt.includes('.ralph/'));
+		} finally {
+			(vscode.workspace as any).workspaceFolders = previousFolders;
+			fs.rmSync(outside, { recursive: true, force: true });
+		}
 	});
 
 	it('generated docs templates use docs/ and never write progress.md under docs/', () => {

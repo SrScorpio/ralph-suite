@@ -18,5 +18,8 @@
   "config.agentCheckpoints.description": "Actions that require a confirmation checkpoint before the agent executes them (e.g. delete files, modify DB schema).",
   "config.memoryOptimizeEvery.description": "Auto-optimize memories.md every N completed tasks (0 = disabled). When triggered, runs a compression pass before the next task.",
   "config.memoryOptimizeReview.description": "When true, shows the optimization prompt in Chat so you can review before it runs. When false, the agent rewrites memories.md directly without confirmation.",
-  "command.optimizeMemory.title": "Ralph: Optimize Project Memory"
+  "command.optimizeMemory.title": "Ralph: Optimize Project Memory",
+  "command.analyzeProject.title": "Ralph: Analyze Existing Project",
+  "command.syncIssue.title": "Ralph: Sync GitHub Issue Status",
+  "command.initProject.title": "Ralph: Start New Project"
 }

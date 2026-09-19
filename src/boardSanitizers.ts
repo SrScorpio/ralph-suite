@@ -20,7 +20,7 @@ export function safeMessageId(raw: unknown): string | null {
 
 /** Type guard: is the value a valid board status? */
 export function isBoardStatus(raw: unknown): raw is Issue['status'] {
-	return raw === 'todo' || raw === 'inprogress' || raw === 'completed' || raw === 'blocked';
+	return raw === 'todo' || raw === 'inprogress' || raw === 'completed' || raw === 'blocked' || raw === 'failed';
 }
 
 /** Sanitize a text value from untrusted input, with a max length. */

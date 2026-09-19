@@ -8,6 +8,8 @@ const originalLoad = (Module as any)._load;
 const noopDisposable = { dispose: () => undefined };
 const configuration = {
 	get: (_key: string, fallback: unknown) => fallback,
+	update: async () => undefined,
+	inspect: () => ({ workspaceValue: undefined, globalValue: undefined }),
 };
 
 const commandsApi = {
@@ -74,6 +76,7 @@ const vscodeMock = {
 		constructor(public base: string, public pattern: string) {}
 	},
 	ViewColumn: { Beside: 2 },
+	ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
 	StatusBarAlignment: { Left: 1 },
 	window: windowApi,
 	workspace: workspaceApi,

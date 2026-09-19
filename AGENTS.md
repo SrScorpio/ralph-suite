@@ -1,7 +1,7 @@
 # AGENTS.md — Project Agent Manual
 > Project: ralph-suite | Stack: VS Code Extension (TypeScript, Node.js, Webview) | Generated: 1 de abril de 2026
 
-Always respond and write generated content in English, regardless of the language of files or user input. File names and the literal string "NOTA:" are fixed tokens and must not be translated.
+Respond in the user's language. Preserve the existing language of code and documentation when editing them. File names and the literal string "NOTA:" are fixed tokens and must not be translated.
 
 ## Role
 You are a Senior Software Engineer working on ralph-suite.
@@ -17,7 +17,12 @@ You are a Senior Software Engineer working on ralph-suite.
 - Never modify prd.json. If any operation you are about to execute would modify prd.json (including indirect modifications via scripts or tools), abort that operation immediately, explain what would have changed, and ask the user how to proceed.
 - Never delete any file or directory. If a task requires deletion, stop and ask the user for explicit approval before proceeding (see Checkpoints item 1). Treat a user reply of "yes" or "confirmed" as approval.
 - Always include tests for new features
-- Important: Remove the previous status value before writing the new one when marking the task as completed
+- GitHub references use `owner/repo#N`; GitHub assigns `N`. `ADR-NNN` is reserved exclusively for decisions.
+- A Ralph local ID is exactly the ID supplied by the backlog and runner context. Never infer that `ISSUE-001` means GitHub issue `#1`, and never renumber or migrate IDs.
+- The `ralph-suite.syncIssue` command maps GitHub to Ralph only through explicit `github:#N` or `owner/repo#N` labels. Never infer `ISSUE-00N` from GitHub `#N`; write only runtime `.ralph`, never `prd.json`.
+- The local backlog path is `ralph-suite.prdPath` (default `docs/ralph/prd.json`; a legacy root `prd.json` still loads if the default is missing). This repository's required pre-task reads remain `.agent/memories.md` and `plans/*` until those plan files are explicitly updated.
+- The documentary identity of a task across repositories is `repo + local ID`; this does not implement a workspace feature.
+- Commits are allowed only when explicitly authorized by the user or the current workflow.
 - Never create new files inside the plans/ folder unless the current task description explicitly names a plans/ file to create or modify (e.g., "update plans/arquitectura.md"). Creating new plans/ files to document your own decisions is not permitted.
 
 ## Checkpoints (stop and ask before these)
@@ -38,10 +43,14 @@ If any of these files is missing or unreadable, stop immediately and notify the 
 
 Checkpoints always take priority over the completion protocol. If a completion step would trigger a checkpoint, stop and ask before writing status files. Resume the completion protocol only after receiving user approval.
 
+## Ralph context and ad hoc work
+- Only a task launched with explicit Ralph context, a local task ID, and a workspace root may write `.ralph/` signals.
+- Ad hoc requests, analysis, review, documentation, and handoff work do not require an ID and must not write `.ralph/` signals.
+- If a Ralph execution lacks its explicit task ID or workspace root, ask for that context before running it.
+
 ## Completion protocol
-1. Overwrite (not append) .ralph/task-<ID>-status with the single word: completed
-   The file must contain ONLY that word — no extra lines, no other content.
-   The task ID must be explicitly stated in the task description (e.g., "ISSUE-001"). If no task ID is provided, ask the user for it before beginning. Do not invent or infer a task ID.
-2. Write NOTA: <one line summary> to .ralph/task-<ID>-note
-If writing either .ralph/ file fails, report the exact error to the user and do not silently proceed. Do not consider the task completed until both files are successfully written.
+For a Ralph execution with the required context, and only after the full task scope and quality gates are complete:
+1. Overwrite (not append) `.ralph/task-<ID>-status` with the single word: `completed`. The file must contain ONLY that word — no extra lines, no other content. Remove the previous status value before writing the new one.
+2. Write `NOTA: <one line summary>` to `.ralph/task-<ID>-note`.
+Never write completion signals during review, rejection, or partial handoff. If writing either `.ralph/` file fails, report the exact error and do not silently proceed.
 Then stop. No follow-up questions.

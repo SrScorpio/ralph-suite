@@ -5,6 +5,10 @@ out/
 *.js.map
 *.vsix
 compiled/
+_p13.py
+_patch_*.py
+_t.py
+_watch.js
 
 # Ralph Suite runtime state (do not commit)
 .ralph/

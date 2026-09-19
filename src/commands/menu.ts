@@ -8,6 +8,11 @@ import * as vscode from 'vscode';
 import { KanbanPanel } from '../kanbanPanel';
 import { DEFAULT_PRD_PATH, PrdManager } from '../prdManager';
 import { resolveWorkspaceRoot } from '../workspaceRoot';
+import { detectLocale, t } from '../i18n';
+
+interface MenuQuickPickItem extends vscode.QuickPickItem {
+	id: string;
+}
 
 export async function showMenu(output: vscode.OutputChannel): Promise<void> {
 	const root = getWorkspaceRoot();
@@ -16,32 +21,36 @@ export async function showMenu(output: vscode.OutputChannel): Promise<void> {
 	const done  = prd ? prd.issues.filter((i: any) => i.status === 'completed').length : 0;
 	const total = prd ? prd.issues.length : 0;
 	const pct   = total ? Math.round((done / total) * 100) : 0;
+	const strings = t(detectLocale());
 
-	const items: vscode.QuickPickItem[] = [
-		{ label: '$(layout-panel)  Open Board',   description: prd ? `${prd.project} — ${done}/${total} (${pct}%)` : 'No prd.json' },
-		{ label: '$(zap)  Auto-run',              description: 'Start autonomous task loop' },
-		{ label: '$(debug-stop)  Stop runner',    description: 'Stop the current run' },
-		{ label: '$(play)  Run next task',        description: 'Run the next pending task' },
-		{ label: '$(add)  Add Issue',             description: 'Add a new issue to prd.json' },
-		{ label: '$(file)  Open PRD',             description: 'Open prd.json in editor' },
-		{ label: '$(book)  Memories',             description: 'Open .agent/memories.md' },
-		{ label: '$(sparkle)  Optimize Memory',   description: 'Compress and deduplicate memories.md' },
-		{ label: '$(tools)  Setup Project',       description: 'Generate/regenerate AGENTS.md and docs/' },
-		{ label: '$(gear)  Settings',             description: 'Configure Ralph Suite' },
+	const items: MenuQuickPickItem[] = [
+		{ id: 'openBoard', label: `$(layout-panel)  ${strings.menuOpenBoard}`, description: prd ? `${prd.project} — ${done}/${total} (${pct}%)` : strings.menuNoPrd },
+		{ id: 'autoRun', label: `$(zap)  ${strings.menuAutoRun}`, description: strings.menuDescAutoRun },
+		{ id: 'stopRunner', label: `$(debug-stop)  ${strings.menuStopRunner}`, description: strings.menuDescStopRunner },
+		{ id: 'runNext', label: `$(play)  ${strings.menuRunNext}`, description: strings.menuDescRunNext },
+		{ id: 'addIssue', label: `$(add)  ${strings.menuAddIssue}`, description: strings.menuDescAddIssue },
+		{ id: 'openPrd', label: `$(file)  ${strings.menuOpenPrd}`, description: strings.menuDescOpenPrd },
+		{ id: 'memories', label: `$(book)  ${strings.menuMemories}`, description: strings.menuDescMemories },
+		{ id: 'optimize', label: `$(sparkle)  ${strings.menuOptimize}`, description: strings.menuDescOptimize },
+		{ id: 'setup', label: `$(tools)  ${strings.menuSetup}`, description: strings.menuDescSetup },
+		{ id: 'initProject', label: `$(new-file)  ${strings.menuInitProject}`, description: strings.menuDescInitProject },
+		{ id: 'analyze', label: `$(search)  ${strings.menuAnalyze}`, description: strings.menuDescAnalyze },
+		{ id: 'syncIssue', label: `$(cloud-download)  ${strings.menuSyncIssue}`, description: strings.menuDescSyncIssue },
+		{ id: 'settings', label: `$(gear)  ${strings.menuSettings}`, description: strings.menuDescSettings },
 	];
 
 	const pick = await vscode.window.showQuickPick(items, {
-		placeHolder: 'Ralph Suite — select a command',
+		placeHolder: strings.menuPlaceholder,
 		matchOnDescription: true,
 	});
 	if (!pick) { return; }
 
 	const boardActions: Record<string, string> = {
-		'$(add)  Add Issue': 'showAddIssue',
-		'$(file)  Open PRD': 'openPrd',
-		'$(book)  Memories': 'openMemories',
+		addIssue: 'showAddIssue',
+		openPrd: 'openPrd',
+		memories: 'openMemories',
 	};
-	const boardAction = boardActions[pick.label];
+	const boardAction = boardActions[pick.id];
 	if (boardAction) {
 		vscode.commands.executeCommand('ralph-suite.openKanban');
 		setTimeout(() => KanbanPanel.sendMessage(boardAction), 500);
@@ -49,16 +58,19 @@ export async function showMenu(output: vscode.OutputChannel): Promise<void> {
 	}
 
 	const directCmds: Record<string, string> = {
-		'$(layout-panel)  Open Board': 'ralph-suite.openKanban',
-		'$(zap)  Auto-run':            'ralph-suite.startRunner',
-		'$(debug-stop)  Stop runner':  'ralph-suite.stopRunner',
-		'$(play)  Run next task':      'ralph-suite.runTask',
-		'$(sparkle)  Optimize Memory': 'ralph-suite.optimizeMemory',
-		'$(tools)  Setup Project':     'ralph-suite.setupProject',
-		'$(gear)  Settings':           'ralph-suite.openSettings',
+		openBoard: 'ralph-suite.openKanban',
+		autoRun: 'ralph-suite.startRunner',
+		stopRunner: 'ralph-suite.stopRunner',
+		runNext: 'ralph-suite.runTask',
+		optimize: 'ralph-suite.optimizeMemory',
+		setup: 'ralph-suite.setupProject',
+		initProject: 'ralph-suite.initProject',
+		analyze: 'ralph-suite.analyzeProject',
+		syncIssue: 'ralph-suite.syncIssue',
+		settings: 'ralph-suite.openSettings',
 	};
-	if (directCmds[pick.label]) {
-		vscode.commands.executeCommand(directCmds[pick.label]);
+	if (directCmds[pick.id]) {
+		vscode.commands.executeCommand(directCmds[pick.id]);
 	}
 }
 

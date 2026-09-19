@@ -24,6 +24,10 @@ interface ChatOptions {
 	delayMs?: number;
 	/** Custom message shown when falling back to the clipboard. */
 	fallbackMessage?: string;
+	/** Abort the command if Chat does not respond in time. */
+	timeoutMs?: number;
+	/** Stop waiting when the runner is stopped. */
+	signal?: AbortSignal;
 }
 
 /**
@@ -39,21 +43,46 @@ export async function sendToChat(prompt: string, options: ChatOptions = {}): Pro
 		freshContext = false,
 		delayMs = 400,
 		fallbackMessage = 'Prompt copied — paste in Chat.',
+		timeoutMs = 10000,
+		signal,
 	} = options;
+	let abortListener: (() => void) | undefined;
 
 	try {
-		if (freshContext) {
-			await vscode.commands.executeCommand('workbench.action.chat.newChat');
-			await sleep(delayMs);
-		}
-		await vscode.commands.executeCommand('workbench.action.chat.open', {
-			query: prompt,
-			isPartialQuery: false,
+		if (signal?.aborted) { throw new Error('Chat command aborted'); }
+		const send = (async () => {
+			if (freshContext) {
+				await vscode.commands.executeCommand('workbench.action.chat.newChat');
+				await sleep(delayMs);
+			}
+			if (signal?.aborted) { throw new Error('Chat command aborted'); }
+			await vscode.commands.executeCommand('workbench.action.chat.open', {
+				query: prompt,
+				isPartialQuery: false,
+			});
+		})();
+		const timeout = new Promise<never>((_, reject) => {
+			const timer = setTimeout(() => reject(new Error('Chat command timed out')), timeoutMs);
+			send.finally(() => clearTimeout(timer)).catch(() => undefined);
 		});
+		const aborted = signal
+			? new Promise<never>((_, reject) => {
+				if (signal.aborted) { reject(new Error('Chat command aborted')); return; }
+				abortListener = () => reject(new Error('Chat command aborted'));
+				signal.addEventListener('abort', abortListener, { once: true });
+			})
+			: new Promise<never>(() => undefined);
+		await Promise.race([send, timeout, aborted]);
+		// Promise.race cannot cancel VS Code's command. A late completion is
+		// intentionally ignored because state changes happen only after true.
 		return true;
 	} catch {
 		await vscode.env.clipboard.writeText(prompt);
 		vscode.window.showInformationMessage(fallbackMessage);
 		return false;
+	} finally {
+		if (signal && abortListener) {
+			signal.removeEventListener('abort', abortListener);
+		}
 	}
 }

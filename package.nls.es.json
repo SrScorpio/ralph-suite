@@ -18,5 +18,8 @@
   "config.agentCheckpoints.description": "Acciones que requieren confirmaci\u00f3n antes de que el agente las ejecute (ej. eliminar archivos, modificar esquema de BD).",
   "config.memoryOptimizeEvery.description": "Optimizar memories.md autom\u00e1ticamente cada N tareas completadas (0 = desactivado). Cuando se activa, ejecuta una compresi\u00f3n antes de la siguiente tarea.",
   "config.memoryOptimizeReview.description": "Si est\u00e1 activado, muestra el prompt de optimizaci\u00f3n en el Chat para revisar antes de ejecutarlo. Si est\u00e1 desactivado, el agente reescribe memories.md directamente sin confirmaci\u00f3n.",
-  "command.optimizeMemory.title": "Ralph: Optimizar Memoria del Proyecto"
+  "command.optimizeMemory.title": "Ralph: Optimizar Memoria del Proyecto",
+  "command.analyzeProject.title": "Ralph: Analizar proyecto existente",
+  "command.syncIssue.title": "Ralph: Sincronizar estado de issue GitHub",
+  "command.initProject.title": "Ralph: Iniciar proyecto nuevo"
 }

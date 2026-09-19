@@ -78,16 +78,35 @@ export class RalphStateManager {
 		return path.join(this.ralphDir(root), `task-${safeTaskId(id)}-log.json`);
 	}
 	static memoriesPath(root: string, configuredPath = '.agent/memories.md'): string {
-		const rootPath = path.resolve(root);
+		const realpath = fs.realpathSync.native ?? fs.realpathSync;
+		const rootPath = realpath(path.resolve(root));
 		const target = path.isAbsolute(configuredPath)
 			? configuredPath
 			: path.join(rootPath, configuredPath || '.agent/memories.md');
-		const resolved = path.resolve(target);
-		// Prevent path traversal outside the workspace (mirrors PrdManager.prdPath)
-		if (resolved !== rootPath && !resolved.startsWith(rootPath + path.sep)) {
-			return path.join(this.agentDir(root), 'memories.md');
+
+		const canonicalizeTarget = (candidate: string): string => {
+			let ancestor = path.resolve(candidate);
+			const missingParts: string[] = [];
+			while (!fs.existsSync(ancestor)) {
+				const parent = path.dirname(ancestor);
+				if (parent === ancestor) { break; }
+				missingParts.unshift(path.basename(ancestor));
+				ancestor = parent;
+			}
+			return path.resolve(realpath(ancestor), ...missingParts);
+		};
+		const isInsideRoot = (candidate: string): boolean =>
+			candidate === rootPath || candidate.startsWith(rootPath + path.sep);
+		const fallback = path.join(rootPath, AGENT_DIR, 'memories.md');
+		const resolved = canonicalizeTarget(target);
+		if (isInsideRoot(resolved)) {
+			return resolved;
 		}
-		return resolved;
+		const safeFallback = canonicalizeTarget(fallback);
+		if (!isInsideRoot(safeFallback)) {
+			throw new Error('Ralph: .agent/memories.md must remain inside the workspace.');
+		}
+		return safeFallback;
 	}
 
 	// ── Init ─────────────────────────────────────────────────────────────────
@@ -107,6 +126,15 @@ export class RalphStateManager {
 	}
 
 	// ── Status ───────────────────────────────────────────────────────────────
+	static setStatus(root: string, id: string, status: 'inprogress' | 'blocked', title?: string) {
+		if (status === 'inprogress') {
+			this.setInProgress(root, id, title);
+			return;
+		}
+		this.ensure(root);
+		fs.writeFileSync(this.statusPath(root, id), status, 'utf-8');
+	}
+
 	static setInProgress(root: string, id: string, title?: string) {
 		this.ensure(root);
 		fs.writeFileSync(this.statusPath(root, id), 'inprogress', 'utf-8');
@@ -126,7 +154,7 @@ export class RalphStateManager {
 		fs.writeFileSync(this.logPath(root, id), JSON.stringify(log, null, 2), 'utf-8');
 	}
 
-	static setCompleted(root: string, id: string, summary?: string, filesChanged?: string[]) {
+	static setCompleted(root: string, id: string, summary?: string, filesChanged?: string[], configuredMemoriesPath?: string) {
 		this.ensure(root);
 		fs.writeFileSync(this.statusPath(root, id), 'completed', 'utf-8');
 
@@ -147,7 +175,7 @@ export class RalphStateManager {
 
 		// Append to memories.md
 		if (summary) {
-			this.appendMemory(root, log);
+			this.appendMemory(root, log, configuredMemoriesPath);
 		}
 	}
 
@@ -172,7 +200,7 @@ export class RalphStateManager {
 		// Keep log for history — don't delete it
 	}
 
-	static getStatus(root: string, id: string): 'todo' | 'inprogress' | 'completed' | 'blocked' {
+	static getStatus(root: string, id: string): 'todo' | 'inprogress' | 'completed' | 'blocked' | 'failed' {
 		const p = this.statusPath(root, id);
 		if (!fs.existsSync(p)) { return 'todo'; }
 		// Read first non-empty line only — agent may accidentally append multiple lines
@@ -186,11 +214,13 @@ export class RalphStateManager {
 		}
 		if (v === 'inprogress') { return 'inprogress'; }
 		if (v === 'completed')  { return 'completed'; }
+		if (v === 'blocked')    { return 'blocked'; }
+		if (v === 'failed')     { return 'failed'; }
 		return 'todo';
 	}
 
-	static getAllStatuses(root: string): Record<string, 'todo' | 'inprogress' | 'completed' | 'blocked'> {
-		const result: Record<string, 'todo' | 'inprogress' | 'completed' | 'blocked'> = {};
+	static getAllStatuses(root: string): Record<string, 'todo' | 'inprogress' | 'completed' | 'blocked' | 'failed'> {
+		const result: Record<string, 'todo' | 'inprogress' | 'completed' | 'blocked' | 'failed'> = {};
 		const d = this.ralphDir(root);
 		if (!fs.existsSync(d)) { return result; }
 		for (const f of fs.readdirSync(d)) {
@@ -211,7 +241,7 @@ export class RalphStateManager {
 	 * Reads the NOTA: line, saves it into the log.json, appends to memories,
 	 * then deletes the signal file.
 	 */
-	static processNoteFile(root: string, id: string): void {
+	static processNoteFile(root: string, id: string, configuredMemoriesPath?: string): void {
 		const np = this.notePath(root, id);
 		if (!fs.existsSync(np)) { return; }
 
@@ -246,7 +276,7 @@ export class RalphStateManager {
 			fs.writeFileSync(lp, JSON.stringify(log, null, 2), 'utf-8');
 
 			// Append to memories.md
-			this.appendMemory(root, log);
+			this.appendMemory(root, log, configuredMemoriesPath);
 
 			// Delete the signal file — it's been consumed
 			fs.unlinkSync(np);
@@ -276,9 +306,9 @@ export class RalphStateManager {
 	}
 
 	// ── Memories ─────────────────────────────────────────────────────────────
-	static appendMemory(root: string, log: TaskLog) {
-		const mp = this.memoriesPath(root);
-		const ad = this.agentDir(root);
+	static appendMemory(root: string, log: TaskLog, configuredMemoriesPath?: string) {
+		const mp = this.memoriesPath(root, configuredMemoriesPath);
+		const ad = path.dirname(mp);
 		if (!fs.existsSync(ad)) { fs.mkdirSync(ad, { recursive: true }); }
 
 		let content = fs.existsSync(mp) ? fs.readFileSync(mp, 'utf-8') : '# Project Memories\n\n';
@@ -303,10 +333,11 @@ export class RalphStateManager {
 		fs.writeFileSync(mp, appendToMemorySection(content, promoted.kind, entry.split('\n')), 'utf-8');
 	}
 
-	static initMemories(root: string, projectGoal: string) {
-		const mp = this.memoriesPath(root);
+	static initMemories(root: string, projectGoal: string, configuredMemoriesPath?: string) {
+		const mp = this.memoriesPath(root, configuredMemoriesPath);
 		if (fs.existsSync(mp)) { return; }
-		this.ensure(root);
+		const dir = path.dirname(mp);
+		if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
 		const content = [
 			'# Project Memories',
 			'',

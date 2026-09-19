@@ -7,7 +7,7 @@ Inspired by the [RALPH Wiggum technique](https://github.com/badlogic/lemmy/issue
 
 ## Install (GitHub Releases, no Marketplace)
 
-Ralph Suite is **not** on the Visual Studio Marketplace. Install the VSIX from [GitHub Releases](https://github.com/SrScorpio/ralph-suite/releases). After the `v1.10.0` tag, the asset is `ralph-suite-1.10.0.vsix`.
+Ralph Suite is **not** on the Visual Studio Marketplace. Install the VSIX from [GitHub Releases](https://github.com/SrScorpio/ralph-suite/releases). The published asset is `ralph-suite-1.10.0.vsix`; the `syncIssue` and runner changes described under `[Unreleased]` are still only in the working tree and pending publication.
 
 1. Open the latest [GitHub Release](https://github.com/SrScorpio/ralph-suite/releases)
 2. Download `ralph-suite-1.10.0.vsix`
@@ -259,11 +259,9 @@ Configure in `Ctrl+,` → Ralph Suite:
 
 **⬆ GitHub** — sends a prompt to Copilot Chat that creates GitHub Issues for all pending issues via MCP, with labels, acceptance criteria checklist, and a `Ralph Suite ID: ISSUE-NNN` reference in the body.
 
-**⬇ Sync** — sends a prompt that reads closed/assigned GitHub Issues and writes the corresponding `.ralph/task-*-status` files back locally, syncing the board.
+**⬇ Sync** — remains a chat prompt for bulk/manual synchronisation that reads closed/assigned GitHub Issues and writes the corresponding `.ralph/task-*-status` files back locally, syncing the board. In the current working tree, `ralph-suite.syncIssue` is also a public command for one explicit GitHub issue/status transition. It requires workspace trust, accepts issue numbers `1..999999`, statuses `todo`, `inprogress`, `blocked` or `completed`, and an optional workspace root that must be allowlisted. The command matches exactly one local task through the labels `github:#N` or `owner/repo#N`. It never infers `ISSUE-00N` from GitHub `#N`, never modifies `prd.json`, and writes only `.ralph/task-<local-id>-status`. The command is implemented in the working tree and is pending publication; the published 1.10.0 asset does not contain it.
 
 Requires the GitHub MCP connector enabled in VSCode.
-
-These board actions are **chat prompts**, not a public command API. There is no `ralph-suite.syncIssue` command. Hosts must not pretend otherwise.
 
 ## Optional host: Alfred Dev
 
@@ -284,7 +282,7 @@ Public commands a host may feature-detect:
 
 In a multi-root window, Ralph prefers the folder that actually has a resolvable PRD (`docs/ralph/prd.json` or legacy root `prd.json`). If none do, it falls back to the first folder and keeps the existing errors (`No workspace open` / `No prd.json found`).
 
-Paired issues: [ralph-suite#1](https://github.com/SrScorpio/ralph-suite/issues/1), [alfred-dev-vscode#40](https://github.com/SrScorpio/alfred-dev-vscode/issues/40). Parallel dispatch and `syncIssue` remain [alfred-dev-vscode#3](https://github.com/SrScorpio/alfred-dev-vscode/issues/3).
+Paired issues: [ralph-suite#1](https://github.com/SrScorpio/ralph-suite/issues/1), [alfred-dev-vscode#40](https://github.com/SrScorpio/alfred-dev-vscode/issues/40). `alfred-dev-vscode#3` remains open for the separate parallel-dispatch scope. ADR-016 reserves any future scheduler for Ralph's runner; Alfred does not launch N concurrent `runTask` calls.
 
 ---
 
@@ -335,4 +333,4 @@ If you have a Plan agent markdown file (from Copilot's `/plan` command):
 
 ## Version
 
-Current: **1.10.0** — see [CHANGELOG.md](CHANGELOG.md) for full history. Distributed from GitHub Releases only (no Marketplace).
+Current published version: **1.10.0** — see [CHANGELOG.md](CHANGELOG.md) for full history. Distributed from GitHub Releases only (no Marketplace). The current working tree contains unreleased changes pending publication.

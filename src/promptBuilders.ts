@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { loadAndInjectContext } from './contextInjector';
-import { safeTaskId } from './stateManager';
+import { RalphStateManager, safeTaskId } from './stateManager';
 import { buildInitPromptText } from './agentsMdBuilders';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -18,6 +18,33 @@ interface AgentProfile {
 	model: string;
 	mode: string;
 	taskType: string;
+}
+
+export interface RalphExecutionContext {
+	kind: 'ralph-execution';
+	localTaskId: string;
+	workspaceRoot: string;
+}
+
+function isValidRalphExecutionContext(task: any, context: unknown): context is RalphExecutionContext {
+	if (!context || typeof context !== 'object') { return false; }
+	const candidate = context as Partial<RalphExecutionContext>;
+	const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
+	const canonical = (value: string): string | null => {
+		try { return fs.realpathSync.native(value); } catch { return null; }
+	};
+	const candidateRoot = typeof candidate.workspaceRoot === 'string' ? canonical(candidate.workspaceRoot) : null;
+	const isWorkspaceRoot = candidateRoot !== null && workspaceFolders.some(folder => {
+		const folderRoot = canonical(folder.uri.fsPath);
+		return folderRoot !== null && folderRoot === candidateRoot;
+	});
+	return candidate.kind === 'ralph-execution'
+		&& typeof candidate.localTaskId === 'string'
+		&& candidate.localTaskId.trim().length > 0
+		&& candidate.localTaskId === task?.id
+		&& typeof candidate.workspaceRoot === 'string'
+		&& candidate.workspaceRoot.trim().length > 0
+		&& isWorkspaceRoot;
 }
 
 // ── Profile resolution ───────────────────────────────────────────────────────
@@ -53,33 +80,52 @@ function resolveAgentProfile(task: any, cfg: vscode.WorkspaceConfiguration): Age
 // ── Memory loader ────────────────────────────────────────────────────────────
 
 function loadMemory(root: string, configuredPath: string = '.agent/memories.md'): string | null {
-	const p = path.isAbsolute(configuredPath) ? configuredPath : path.join(root, configuredPath);
+	const p = RalphStateManager.memoriesPath(root, configuredPath);
 	if (!fs.existsSync(p)) { return null; }
 	return fs.readFileSync(p, 'utf-8').trim() || null;
 }
 
 // ── Task prompt ──────────────────────────────────────────────────────────────
 
-export function buildPrompt(task: any, prd: any, workspaceRoot: string): string {
+export function buildPrompt(task: any, prd: any, context: unknown): string {
+	const ralphContext = isValidRalphExecutionContext(task, context) ? context : null;
+	const workspaceRoot = ralphContext?.workspaceRoot;
 	// ISSUE-002: Intelligent context injection (ADR-002)
 	const cfg    = vscode.workspace.getConfiguration('ralph-suite');
 	const memPath = cfg.get<string>('memoriesPath', '.agent/memories.md');
-	const injection = loadAndInjectContext(
+	const injection = workspaceRoot ? loadAndInjectContext(
 		workspaceRoot,
 		task.description || '',
 		task.dependencies || [],
 		task.labels || [],
 		task.epic,
 		memPath
-	);
-	const memory = injection ? injection.injected : loadMemory(workspaceRoot, memPath);
+	) : null;
+	const memory = workspaceRoot
+		? injection ? injection.injected : loadMemory(workspaceRoot, memPath)
+		: null;
 	const guardrails: string[] = cfg.get('guardrails', []);
 	const boundaries: string[] = cfg.get('boundaries', []);
 	const profile = resolveAgentProfile(task, cfg);
-	const ralphDir   = path.join(workspaceRoot, '.ralph').replace(/\\/g, '/');
-	const safeId = safeTaskId(task.id);
-	const statusFile = `${ralphDir}/task-${safeId}-status`;
-	const noteFile   = `${ralphDir}/task-${safeId}-note`;
+	const completionSignals = ralphContext ? (() => {
+		const ralphDir = path.join(ralphContext.workspaceRoot, '.ralph').replace(/\\/g, '/');
+		const safeId = safeTaskId(task.id);
+		const statusFile = `${ralphDir}/task-${safeId}-status`;
+		const noteFile = `${ralphDir}/task-${safeId}-note`;
+		return [
+			'━━━ COMPLETION SIGNALS (Ralph execution only; both required after gates) ━━━',
+			'Completion signals are permitted only for an explicit Ralph context, local task ID, and workspace root.',
+			`Use the local backlog ID exactly as provided: ${task.id}; never infer a GitHub issue number or renumber or migrate the ID.`,
+			'Write these signals only after the full task scope, verification commands, and quality gates are complete.',
+			'Never write completion signals during rejection, blocking, review, or partial handoff.',
+			`1. Write (overwrite, not append) the single word \`completed\` to: ${statusFile}`,
+			'   The file must contain ONLY the word "completed" — nothing else, no extra lines.',
+			`2. Write \`NOTA: <one line summary>\` to: ${noteFile}`,
+			'   Example: NOTA: Created plugin skeleton with admin menu and REST endpoint stubs',
+			'   Stable memory promotion is explicit: use DECISION:, MEMORIA:, BUG:, or CONVENCION: only for reusable project knowledge.',
+			'Do NOT append — overwrite.',
+		];
+	})() : [];
 
 	return [
 		`## Agent Profile`,
@@ -107,13 +153,7 @@ export function buildPrompt(task: any, prd: any, workspaceRoot: string): string 
 		'After editing, run the narrowest relevant verification command available.',
 		'⚠️ Do NOT modify prd.json.',
 		'',
-		'━━━ COMPLETION SIGNALS (both required) ━━━',
-		`1. Write (overwrite, not append) the single word \`completed\` to: ${statusFile}`,
-		`   The file must contain ONLY the word "completed" — nothing else, no extra lines.`,
-		`2. Write \`NOTA: <one line summary>\` to: ${noteFile}`,
-		`   Example: NOTA: Created plugin skeleton with admin menu and REST endpoint stubs`,
-		`   Stable memory promotion is explicit: use DECISION:, MEMORIA:, BUG:, or CONVENCION: only for reusable project knowledge.`,
-		'Do NOT skip either step. Do NOT append — overwrite.',
+		...completionSignals,
 	].filter(Boolean).join('\n');
 }
 
