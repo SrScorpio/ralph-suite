@@ -51,9 +51,9 @@ export function computeHealthScore(
 	}
 
 	// Count statuses
-	const statusCount = { todo: 0, inprogress: 0, completed: 0, blocked: 0 };
+	const statusCount = { todo: 0, inprogress: 0, completed: 0, blocked: 0, failed: 0 };
 	for (const issue of prd.issues) {
-		const s = statuses[issue.id] ?? 'todo';
+		const s = statuses[String(issue.folderIndex ?? '') + (issue.folderIndex === undefined ? '' : ':') + issue.id] ?? statuses[issue.id] ?? issue.status ?? 'todo';
 		if (s in statusCount) { (statusCount as any)[s]++; }
 	}
 

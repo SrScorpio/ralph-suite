@@ -19,11 +19,12 @@ import { resolveWorkspaceRoot } from '../workspaceRoot';
 
 export async function initProject(root: string, output: vscode.OutputChannel): Promise<void> {
 	const prdPath  = PrdManager.prdPath(root, getPrdPathSetting());
+	const displayPath = prdDisplayPath(root, prdPath);
 	const ralphDir = path.join(root, '.ralph');
 
 	if (fs.existsSync(prdPath)) {
 		const action = await vscode.window.showInformationMessage(
-			'prd.json already exists.', 'Open Kanban', 'Cancel'
+			`${displayPath} already exists.`, 'Open Kanban', 'Cancel'
 		);
 		if (action === 'Open Kanban') { vscode.commands.executeCommand('ralph-suite.openKanban'); }
 		return;
@@ -46,7 +47,7 @@ export async function initProject(root: string, output: vscode.OutputChannel): P
 	}
 
 	const goal = await vscode.window.showInputBox({
-		title: 'Ralph Suite — Init Project',
+		title: 'Ralph Suite — Start New Project',
 		prompt: 'Describe your project goal',
 		placeHolder: 'e.g. WordPress plugin for image geolocation',
 		ignoreFocusOut: true
@@ -55,15 +56,7 @@ export async function initProject(root: string, output: vscode.OutputChannel): P
 
 	// Create memories.md at the configured path (default: .agent/memories.md)
 	const memCfg = vscode.workspace.getConfiguration('ralph-suite').get<string>('memoriesPath', '.agent/memories.md');
-	const memoriesPath = path.isAbsolute(memCfg) ? memCfg : path.join(root, memCfg);
-	const agentDir = path.dirname(memoriesPath);
-	if (!fs.existsSync(agentDir)) { fs.mkdirSync(agentDir, { recursive: true }); }
-	if (!fs.existsSync(memoriesPath)) {
-		fs.writeFileSync(memoriesPath,
-			`# Project Memories\n\n## Project\n- Goal: ${goal}\n- Created: ${new Date().toISOString().slice(0, 10)}\n`,
-			'utf-8'
-		);
-	}
+	RalphStateManager.initMemories(root, goal, memCfg);
 
 	const prompt = buildInitPrompt(goal, root);
 	output.appendLine(`[Ralph] Init prompt: ${prompt.length} chars`);
@@ -75,7 +68,7 @@ export async function initProject(root: string, output: vscode.OutputChannel): P
 	}
 	output.appendLine('[Ralph] Chat opened');
 
-	vscode.window.showInformationMessage('Chat opened. When prd.json is created, open the board.');
+	vscode.window.showInformationMessage(`Chat opened. When ${displayPath} is created, open the board.`);
 
 	// Poll for prd.json
 	const prdPath2 = PrdManager.prdPath(root, getPrdPathSetting());
@@ -84,14 +77,14 @@ export async function initProject(root: string, output: vscode.OutputChannel): P
 		polls++;
 		if (fs.existsSync(prdPath2)) {
 			clearInterval(timer);
-			output.appendLine('[Ralph] prd.json detected!');
+			output.appendLine(`[Ralph] ${displayPath} detected!`);
 			KanbanPanel.refresh();
-			vscode.window.showInformationMessage('prd.json created!', 'Open Board').then(a => {
+			vscode.window.showInformationMessage(`${displayPath} created!`, 'Open Board').then(a => {
 				if (a === 'Open Board') { vscode.commands.executeCommand('ralph-suite.openKanban'); }
 			});
 		} else if (polls >= 120) {
 			clearInterval(timer);
-			output.appendLine('[Ralph] Poll timeout — prd.json not found after 10min');
+			output.appendLine(`[Ralph] Poll timeout — ${displayPath} not found after 10min`);
 		}
 	}, 5000);
 }
@@ -156,6 +149,15 @@ export async function setupProject(output: vscode.OutputChannel): Promise<void> 
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+export function prdDisplayPath(root: string, prdPath: string): string {
+	try {
+		const relativePath = path.relative(root, prdPath).replace(/\\/g, '/');
+		return relativePath || 'prd.json';
+	} catch {
+		return 'prd.json';
+	}
+}
 
 function getWorkspaceRoot(): string | undefined {
 	return resolveWorkspaceRoot(

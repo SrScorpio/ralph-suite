@@ -13,6 +13,12 @@
   "activationEvents": [
     "onStartupFinished"
   ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Ralph Suite necesita un workspace de confianza para escribir estado y ejecutar tareas."
+    }
+  },
   "main": "./dist/extension.js",
   "icon": "images/icon.png",
   "repository": {
@@ -27,11 +33,19 @@
       },
       {
         "command": "ralph-suite.initProject",
-        "title": "Ralph: Init Project"
+        "title": "%command.initProject.title%"
+      },
+      {
+        "command": "ralph-suite.analyzeProject",
+        "title": "%command.analyzeProject.title%"
       },
       {
         "command": "ralph-suite.runTask",
         "title": "Ralph: Run Next Task"
+      },
+      {
+        "command": "ralph-suite.syncIssue",
+        "title": "%command.syncIssue.title%"
       },
       {
         "command": "ralph-suite.openSettings",
@@ -71,10 +85,31 @@
           "command": "ralph-suite.openKanban"
         },
         {
+          "command": "ralph-suite.showMenu"
+        },
+        {
           "command": "ralph-suite.initProject"
         },
         {
+          "command": "ralph-suite.analyzeProject"
+        },
+        {
           "command": "ralph-suite.runTask"
+        },
+        {
+          "command": "ralph-suite.startRunner"
+        },
+        {
+          "command": "ralph-suite.stopRunner"
+        },
+        {
+          "command": "ralph-suite.syncIssue"
+        },
+        {
+          "command": "ralph-suite.setupProject"
+        },
+        {
+          "command": "ralph-suite.optimizeMemory"
         },
         {
           "command": "ralph-suite.openSettings"
@@ -140,6 +175,12 @@
           "default": true,
           "description": "%config.freshContext.description%"
         },
+        "ralph-suite.boardScope": {
+          "type": "string",
+          "enum": ["folder", "workspace"],
+          "default": "folder",
+          "description": "Kanban scope: current folder or aggregated workspace folders."
+        },
         "ralph-suite.prdPath": {
           "type": "string",
           "default": "docs/ralph/prd.json",
@@ -159,8 +200,12 @@
             "Never modify prd.json",
             "Never delete files without confirmation",
             "Always include tests for new features",
-            "Task states must be exactly: todo | inprogress | completed | blocked — never mix or invent states",
-            "When a task is finished, write the completion signal and wait for instructions — do not generate extra questions unless explicitly part of the task",
+            "Task states must be exactly: todo | inprogress | completed | blocked | failed — never mix or invent states",
+            "Use GitHub references as owner/repo#N; GitHub assigns N. Reserve ADR-NNN exclusively for decisions",
+            "Use the Ralph local ID exactly as supplied by the backlog and runner context; never infer GitHub numbers or renumber or migrate IDs",
+            "Only Ralph executions with explicit task ID and workspace root write .ralph signals; ad hoc, analysis, review, documentation and handoff work does not require an ID or signals",
+            "Write the exact completed status and NOTA signal only after the full task scope and quality gates pass; never during review, rejection or partial handoff",
+            "Only authorized commits are allowed; authorization must come from the user or current workflow",
             "Always read .agent/memories.md before starting any task to load project context",
             "Never commit secrets, API keys, tokens or passwords — use environment variables",
             "Always validate and sanitize user inputs — never trust raw input",
@@ -169,7 +214,7 @@
             "All new code must follow the conventions already present in the codebase — check existing patterns before creating new ones",
             "Log important decisions and architectural choices in .agent/memories.md",
             "Never use placeholders or TODO comments in production code — implement or leave existing code",
-            "If blocked, write a clear explanation in the note signal — do not silently timeout"
+            "If a Ralph execution lacks explicit task ID or workspace root, ask for that context before running it"
           ],
           "description": "%config.guardrails.description%"
         },
@@ -255,7 +300,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "package": "vsce package --no-dependencies",
-    "test": "NODE_NO_WARNINGS=1 npx mocha --require ts-node/register --require ./src/test/vscodeMock.js 'src/test/**/*.test.ts' --timeout 10000"
+    "test": "node scripts/run-tests.js"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.0",

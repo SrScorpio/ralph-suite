@@ -32,6 +32,14 @@ ${stackLines}
 ## Rules (always follow)
 ${guardrailList}
 
+## IDs and collaboration
+- GitHub references use owner/repo#N; GitHub assigns N.
+- ADR-NNN is reserved exclusively for decisions.
+- A Ralph local ID is exactly the ID supplied by the backlog and runner context. Do not infer that ISSUE-001 means GitHub issue #1, and do not renumber or migrate IDs.
+- The ralph-suite.syncIssue command maps GitHub to Ralph only through explicit github:#N or owner/repo#N labels. Never infer ISSUE-00N from GitHub #N; write only runtime .ralph, never prd.json.
+- The documentary identity across repositories is repo + local ID; this does not implement a workspace feature.
+- Only authorized commits are allowed.
+
 ## Checkpoints (stop and ask before these)
 ${checkpointList}
 
@@ -44,11 +52,16 @@ ${checkpointList}
 
 Runtime lives in \`.ralph/\` (gitignored). If you write loop scratch, use \`.ralph/progress.md\`.
 
+## Ralph context and ad hoc work
+- Only a Ralph task with explicit Ralph task ID and workspace root may write .ralph/ signals.
+- Ad hoc, analysis, review, documentation, and handoff requests do not require an ID and must not write .ralph/ signals.
+- If a Ralph execution lacks its task ID or workspace root, ask for that context before running it.
+
 ## Completion protocol
-1. Overwrite (not append) \`.ralph/task-<ID>-status\` with the single word: \`completed\`
-   File must contain ONLY that word — no extra lines, no other content.
-2. Write \`NOTA: <one line summary>\` → \`.ralph/task-<ID>-note\`
-Then stop and wait. Do not ask follow-up questions.
+For a Ralph task with the required context, and only after the full task scope and quality gates are complete:
+1. Overwrite (not append) .ralph/task-<ID>-status with the single word: completed. Remove the previous status value first. The file must contain ONLY that word — no extra lines, no other content.
+2. Write NOTA: <one line summary> to .ralph/task-<ID>-note.
+Never write completion signals during review, rejection, or partial handoff. If writing either file fails, report the exact error and do not silently proceed.
 
 ## Testing
 - Run existing tests before marking any task completed
@@ -68,12 +81,19 @@ export function buildCopilotInstructions(project: string, stack: string): string
 **Project:** ${project || 'See AGENTS.md'}
 **Stack:** ${stack || 'See AGENTS.md'}
 
+## IDs and collaboration
+- GitHub references use owner/repo#N; GitHub assigns N. ADR-NNN is reserved for decisions.
+- Use the Ralph local ID exactly as provided by the backlog and runner context. Do not infer GitHub issue numbers, renumber IDs, or migrate them.
+- The ralph-suite.syncIssue command maps GitHub to Ralph only through explicit github:#N or owner/repo#N labels. Never infer ISSUE-00N from GitHub #N; write only runtime .ralph, never prd.json.
+- Ad hoc, analysis, review, documentation, and handoff work does not require an ID or .ralph signals. A Ralph execution without explicit task ID and workspace root must request that context.
+
 ## Critical Rules
 1. Read \`.agent/memories.md\` before starting any task
 2. Follow conventions already in the codebase
 3. Tests required for new features
 4. Never commit secrets — use environment variables
-5. Write completion signals when done
+5. Commits only when explicitly authorized
+6. Write completion signals only for Ralph tasks with explicit context, after all scope and gates pass
 `;
 }
 
@@ -208,11 +228,12 @@ ${checkpointList}
 - docs/adr/
 - ${DEFAULT_PRD_PATH}
 
-## Completion protocol
-1. Overwrite (not append) .ralph/task-<ID>-status with the single word: completed
-   The file must contain ONLY that word — no extra lines, no other content.
-2. Write NOTA: <one line summary> to .ralph/task-<ID>-note
-Then stop. No follow-up questions.
+## IDs and completion
+- Use the backlog ID exactly as provided by the Ralph context. Do not infer a GitHub issue number from a local ID, renumber IDs, or migrate them.
+- GitHub references use owner/repo#N, with N assigned by GitHub. ADR-NNN is only for decisions.
+- The ralph-suite.syncIssue command maps GitHub to Ralph only through explicit github:#N or owner/repo#N labels. Never infer ISSUE-00N from GitHub #N; write only runtime .ralph, never prd.json.
+- Ad hoc work does not require an ID or .ralph signals. A Ralph execution without explicit task ID and workspace root must request that context.
+- For a Ralph execution with the required context, write the exact completed status and NOTA: note only after all scope and gates pass; never for review, rejection, or partial handoff.
 \`\`\`
 
 ### File 2: .github/copilot-instructions.md
@@ -252,7 +273,7 @@ Optional human plan; it does not replace prd.json.
   }]
 }
 \`\`\`
-Rules: ISSUE-NNN ids, P0>P1>P2>P3, status always "todo", add git commit after each feature issue.
+Rules: preserve each local backlog ID exactly, use P0>P1>P2>P3, and set the initial status to "todo". Do not infer GitHub issue numbers or add commits unless explicitly authorized.
 CREATE the file at: ${prdFile}
 Create parent directories if needed. Loop scratch belongs in .ralph/progress.md if you write any.
 

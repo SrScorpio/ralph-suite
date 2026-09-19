@@ -20,6 +20,7 @@ export interface UIStrings {
 	emptyNoPrd: string;
 	emptyNoPrdSub: string;
 	initProject: string;
+	analyzeProject: string;
 	importPlan: string;
 	emptyHint: string;
 
@@ -41,11 +42,42 @@ export interface UIStrings {
 	settings: string;
 	refresh: string;
 
+	// Command menu
+	menuOpenBoard: string;
+	menuAutoRun: string;
+	menuStopRunner: string;
+	menuRunNext: string;
+	menuAddIssue: string;
+	menuOpenPrd: string;
+	menuMemories: string;
+	menuOptimize: string;
+	menuSetup: string;
+	menuAnalyze: string;
+	menuSyncIssue: string;
+	menuSettings: string;
+	menuPlaceholder: string;
+	menuNoPrd: string;
+	menuDescBoard: string;
+	menuDescAutoRun: string;
+	menuDescStopRunner: string;
+	menuDescRunNext: string;
+	menuDescAddIssue: string;
+	menuDescOpenPrd: string;
+	menuDescMemories: string;
+	menuDescOptimize: string;
+	menuDescSetup: string;
+	menuInitProject: string;
+	menuDescAnalyze: string;
+	menuDescInitProject: string;
+	menuDescSyncIssue: string;
+	menuDescSettings: string;
+
 	// Board columns
 	colTodo: string;
 	colInProgress: string;
 	colDone: string;
 	colBlocked: string;
+	colFailed: string;
 	dropHere: string;
 
 	// Card actions
@@ -55,6 +87,7 @@ export interface UIStrings {
 	addNote: string;
 	reset: string;
 	blocked: string;
+	failed: string;
 
 	// Modals
 	newIssue: string;
@@ -88,7 +121,8 @@ export interface UIStrings {
 const en: UIStrings = {
 	emptyNoPrd: 'No prd.json found',
 	emptyNoPrdSub: 'Generate one from a project description or import a Plan.',
-	initProject: 'Init Project',
+	initProject: 'Start New Project',
+	analyzeProject: 'Analyze Existing Project',
 	importPlan: '⬇ Import Plan',
 	emptyHint: 'Or place a <code>prd.json</code> at <code>docs/ralph/prd.json</code> (legacy root <code>prd.json</code> still works)',
 	board: '⊞ Board',
@@ -107,10 +141,39 @@ const en: UIStrings = {
 	agents: '⚙ Agents',
 	settings: '⚙',
 	refresh: '↻',
+	menuOpenBoard: 'Open Board',
+	menuAutoRun: 'Auto-run',
+	menuStopRunner: 'Stop runner',
+	menuRunNext: 'Run next task',
+	menuAddIssue: 'Add Issue',
+	menuOpenPrd: 'Open PRD',
+	menuMemories: 'Memories',
+	menuOptimize: 'Optimize Memory',
+	menuSetup: 'Setup Project',
+	menuInitProject: 'Start New Project',
+	menuAnalyze: 'Analyze Existing Project',
+	menuSyncIssue: 'Sync GitHub issue',
+	menuSettings: 'Settings',
+	menuPlaceholder: 'Ralph Suite — select a command',
+	menuNoPrd: 'No prd.json',
+	menuDescBoard: 'Open the Kanban board',
+	menuDescAutoRun: 'Start autonomous task loop',
+	menuDescStopRunner: 'Stop the current run',
+	menuDescRunNext: 'Run the next pending task',
+	menuDescAddIssue: 'Add a new issue to prd.json',
+	menuDescOpenPrd: 'Open prd.json in editor',
+	menuDescMemories: 'Open .agent/memories.md',
+	menuDescOptimize: 'Compress and deduplicate memories.md',
+	menuDescSetup: 'Generate or regenerate AGENTS.md and docs/',
+	menuDescInitProject: 'Describe a goal and generate a PRD',
+	menuDescAnalyze: 'Generate a PRD from the current workspace',
+	menuDescSyncIssue: 'Sync GitHub issue status to the local task',
+	menuDescSettings: 'Configure Ralph Suite',
 	colTodo: 'To Do',
 	colInProgress: 'In Progress',
 	colDone: 'Done',
 	colBlocked: 'Blocked',
+	colFailed: 'Failed',
 	dropHere: 'Drop here',
 	run: '▶ Run',
 	refreshContext: '🔄 Refresh',
@@ -118,6 +181,7 @@ const en: UIStrings = {
 	addNote: '✎',
 	reset: '↩ Reset',
 	blocked: '⛓ Blocked',
+	failed: '⚠ Failed',
 	newIssue: '＋ New Issue',
 	editIssue: '✎ Edit Issue',
 	title: 'Title',
@@ -145,7 +209,8 @@ const en: UIStrings = {
 const es: UIStrings = {
 	emptyNoPrd: 'No se encontró prd.json',
 	emptyNoPrdSub: 'Genera uno desde una descripción de proyecto o importa un Plan.',
-	initProject: 'Iniciar Proyecto',
+	initProject: 'Iniciar proyecto nuevo',
+	analyzeProject: 'Analizar proyecto existente',
 	importPlan: '⬇ Importar Plan',
 	emptyHint: 'O coloca un <code>prd.json</code> en <code>docs/ralph/prd.json</code> (el <code>prd.json</code> legado en la raíz sigue valiendo)',
 	board: '⊞ Tablero',
@@ -164,10 +229,39 @@ const es: UIStrings = {
 	agents: '⚙ Agents',
 	settings: '⚙',
 	refresh: '↻',
+	menuOpenBoard: 'Abrir tablero',
+	menuAutoRun: 'Auto-ejecutar',
+	menuStopRunner: 'Detener runner',
+	menuRunNext: 'Ejecutar siguiente tarea',
+	menuAddIssue: 'Añadir issue',
+	menuOpenPrd: 'Abrir PRD',
+	menuMemories: 'Memorias',
+	menuOptimize: 'Optimizar memoria',
+	menuSetup: 'Configurar proyecto',
+	menuInitProject: 'Iniciar proyecto nuevo',
+	menuAnalyze: 'Analizar proyecto existente',
+	menuSyncIssue: 'Sincronizar issue GitHub',
+	menuSettings: 'Ajustes',
+	menuPlaceholder: 'Ralph Suite — elige un comando',
+	menuNoPrd: 'Sin prd.json',
+	menuDescBoard: 'Abrir el tablero Kanban',
+	menuDescAutoRun: 'Iniciar el ciclo autónomo de tareas',
+	menuDescStopRunner: 'Detener la ejecución actual',
+	menuDescRunNext: 'Ejecutar la siguiente tarea pendiente',
+	menuDescAddIssue: 'Añadir un issue nuevo a prd.json',
+	menuDescOpenPrd: 'Abrir prd.json en el editor',
+	menuDescMemories: 'Abrir .agent/memories.md',
+	menuDescOptimize: 'Comprimir y deduplicar memories.md',
+	menuDescSetup: 'Generar o regenerar AGENTS.md y docs/',
+	menuDescInitProject: 'Describe un objetivo y genera un PRD',
+	menuDescAnalyze: 'Generar un PRD desde el workspace actual',
+	menuDescSyncIssue: 'Sincronizar el estado de un issue GitHub con la tarea local',
+	menuDescSettings: 'Configurar Ralph Suite',
 	colTodo: 'Por hacer',
 	colInProgress: 'En progreso',
 	colDone: 'Completado',
 	colBlocked: 'Bloqueado',
+	colFailed: 'Fallido',
 	dropHere: 'Soltar aquí',
 	run: '▶ Ejecutar',
 	refreshContext: '🔄 Refrescar',
@@ -175,6 +269,7 @@ const es: UIStrings = {
 	addNote: '✎',
 	reset: '↩ Reiniciar',
 	blocked: '⛓ Bloqueado',
+	failed: '⚠ Fallido',
 	newIssue: '＋ Nuevo Issue',
 	editIssue: '✎ Editar Issue',
 	title: 'Título',

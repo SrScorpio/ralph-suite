@@ -72,5 +72,61 @@ describe('chatLauncher', () => {
 			assert.ok(!commandsCalled.includes('workbench.action.chat.newChat'), 'should not call newChat');
 			assert.ok(commandsCalled.includes('workbench.action.chat.open'), 'should call chat.open');
 		});
+
+		it('returns false when chat.open exceeds the timeout', async () => {
+			const origExec = vscode.commands.executeCommand;
+			const origWrite = vscode.env.clipboard.writeText;
+			(vscode.commands as any).executeCommand = async () => new Promise(() => undefined);
+			(vscode.env.clipboard as any).writeText = async () => undefined;
+			try {
+				const started = Date.now();
+				const result = await sendToChat('Timeout test', { timeoutMs: 10 });
+				assert.strictEqual(result, false);
+				assert.ok(Date.now() - started < 500);
+			} finally {
+				(vscode.commands as any).executeCommand = origExec;
+				(vscode.env.clipboard as any).writeText = origWrite;
+			}
+		});
+
+		it('removes the abort listener after a timeout', async () => {
+			const origExec = vscode.commands.executeCommand;
+			const origWrite = vscode.env.clipboard.writeText;
+			const listeners: EventListener[] = [];
+			const signal = {
+				aborted: false,
+				addEventListener: (_type: string, listener: EventListener) => { listeners.push(listener); },
+				removeEventListener: (_type: string, listener: EventListener) => {
+					const index = listeners.indexOf(listener);
+					if (index >= 0) { listeners.splice(index, 1); }
+				},
+			} as unknown as AbortSignal;
+			(vscode.commands as any).executeCommand = async () => new Promise(() => undefined);
+			(vscode.env.clipboard as any).writeText = async () => undefined;
+			try {
+				await sendToChat('Listener cleanup', { timeoutMs: 10, signal });
+				assert.strictEqual(listeners.length, 0);
+			} finally {
+				(vscode.commands as any).executeCommand = origExec;
+				(vscode.env.clipboard as any).writeText = origWrite;
+			}
+		});
+
+		it('does not open chat when the signal is already aborted', async () => {
+			const controller = new AbortController();
+			controller.abort();
+			const origExec = vscode.commands.executeCommand;
+			let opened = false;
+			(vscode.commands as any).executeCommand = async (command: string) => {
+				if (command === 'workbench.action.chat.open') { opened = true; }
+			};
+			try {
+				const result = await sendToChat('Pre-aborted prompt', { signal: controller.signal });
+				assert.strictEqual(result, false);
+				assert.strictEqual(opened, false);
+			} finally {
+				(vscode.commands as any).executeCommand = origExec;
+			}
+		});
 	});
 });

@@ -75,7 +75,7 @@ Fecha: 5 de junio de 2026
 - Estado: accepted
 - Contexto: `kanbanPanel.ts` tenía lecturas/escrituras directas de `prd.json` en reorder, edit, add e import. Eso duplicaba lógica, dificultaba validar y aumentaba riesgo de corrupción del backlog.
 - Decisión: Centralizar el acceso raw en `PrdManager`: `loadRaw`, `saveRaw`, `mutateRaw`, `rawItems` y `setRawItems`. Las escrituras usan archivo temporal y `rename` final.
-- Consecuencias: Menos escrituras dispersas y base para validación/backup/configuración futura. Queda pendiente hacer que todos los comandos respeten `ralph-suite.prdPath` si se permite una ruta distinta a `prd.json`.
+- Consecuencias: Menos escrituras dispersas y base para validación/backup/configuración futura. Los comandos resuelven el backlog con `ralph-suite.prdPath` (por defecto `docs/ralph/prd.json`; si falta, `prd.json` legado en raíz). No hay escrituras agenticas a `prd.json`.
 
 ## ADR-014 — Modularización post-refactor y cleanup
 - Estado: accepted
@@ -113,3 +113,10 @@ Fecha: 5 de junio de 2026
   4. **Corregir** NLS: añadir `codex` a la descripción de `engine` (EN + ES).
 
 - Consecuencias: Configuración coherente — todo lo declarado funciona, todo lo que funciona está declarado, las 17 claves NLS están sincronizadas EN/ES. Se evita la confusión de settings duales con semántica opuesta. Riesgo: si alguien había configurado `autoRun` o `memoryOptimizeAutoApply` en su `settings.json`, esas claves dejarán de tener efecto (no causan error, VS Code las ignora como settings desconocidos).
+
+## ADR-016 — Dispatch paralelo propiedad del runner
+- Estado: proposed
+- Contexto: `alfred-dev-vscode#3` combina `syncIssue` con dispatch paralelo. El runner actual comparte un `KanbanPanel`, una señal de abort, la superficie de Chat de VS Code y polling sobre `.ralph`; Alfred no dispone de sesiones de Chat aisladas ni de leases por tarea.
+- Decisión: cerrar el alcance actual con `ralph-suite.syncIssue` y no lanzar N llamadas concurrentes a `ralph-suite.runTask`. Si se retoma el paralelismo, debe ser un scheduler acotado propiedad de Ralph, con contexto, abort y lease por tarea.
+- Consecuencias: se evita introducir carreras y se conserva el runner serial actual. #3 queda parcialmente resuelto hasta que exista un contrato de scheduler con aislamiento, límites de concurrencia, recuperación y validación de seguridad.
+- Detalle: `docs/adr/ADR-016-dispatch-paralelo-propiedad-del-runner.md`.

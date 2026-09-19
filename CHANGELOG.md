@@ -6,6 +6,19 @@ All notable changes to Ralph Suite are documented here.
 
 ## [Unreleased]
 
+### Added
+- `ralph-suite.syncIssue` as a public, trust-gated command for syncing one GitHub issue status to the matching local Ralph task. It accepts issue numbers `1..999999`, statuses `todo`, `inprogress`, `blocked` and `completed`, and an optional allowlisted workspace root.
+- Explicit label mapping for `github:#N` and `owner/repo#N`. The command never infers a GitHub number from a local ID such as `ISSUE-012`.
+- Multi-folder watchers and the `Analyze Existing Project` / `Start New Project` flows in the current working tree, together with the Windows-safe `scripts/run-tests.js` runner and abort/timeout/listener cleanup in `sendToChat`.
+
+### Changed
+- Issue sync writes only `.ralph/task-<local-id>-status`; it does not modify `prd.json`.
+- ADR-016 keeps parallel dispatch out of Alfred: no N× `runTask` calls are launched. A future scheduler, if needed, belongs to Ralph's runner.
+
+### Verified
+- QA and security gates approved; 132 tests pass in the current working tree.
+- These changes are pending publication. They are not a new release and are not included in the published `1.10.0` asset.
+
 ## [1.10.0] - 2026-09-18
 
 ### Added

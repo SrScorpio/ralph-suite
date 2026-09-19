@@ -10,6 +10,8 @@ export interface BoardConfig {
 	view: 'board'|'epic'|'history';
 	health?: HealthScore;
 	locale?: Locale;
+	boardScope?: 'folder' | 'workspace';
+	showScopeSwitch?: boolean;
 }
 
 // ── Shell HTML — loaded ONCE, never replaced ──────────────────────────────────
@@ -215,7 +217,7 @@ summary:hover{color:var(--text)}
 
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
-function send(type, id) { vscode.postMessage({ type, id }); }
+function send(type, id, folderIndex) { vscode.postMessage({ type, id, folderIndex }); }
 
 // ── Receive data updates from extension via postMessage ───────────────────────
 window.addEventListener('message', e => {
@@ -300,12 +302,12 @@ document.addEventListener('click', e => {
   const id = el.dataset.id;
   switch (action) {
     case 'runTask': case 'contextRefresh': case 'markDone': case 'addNote': case 'resetTask':
-    case 'showEditIssue': case 'setView':
-      send(action, id); break;
+    case 'showEditIssue': case 'setView': case 'setBoardScope':
+      send(action, id, el.dataset.folderIndex === undefined ? undefined : Number(el.dataset.folderIndex)); break;
     case 'startRunner': case 'stopRunner': case 'pushToGitHub': case 'syncFromGitHub':
     case 'showAddIssue': case 'addFromChat': case 'openPrd': case 'openMemories':
     case 'optimizeMemory': case 'importPlan': case 'setupProject': case 'openSettings':
-    case 'refresh': case 'initProject':
+    case 'refresh': case 'initProject': case 'analyzeProject':
       send(action); break;
     case 'cancelAdd':  closeAddModal(); break;
     case 'submitAdd':  submitAddIssue(); break;
@@ -326,13 +328,13 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Drag & Drop (delegated via closest) ───────────────────────────────────────
-let dragId = null, dragEl = null, dragSourceCol = null;
+let dragId = null, dragEl = null, dragSourceCol = null, dragFolderIndex = null;
 const ghost = document.getElementById('dragGhost');
 
 document.addEventListener('dragstart', e => {
   const cardEl = e.target.closest('.card');
   if (!cardEl) { return; }
-  dragEl = cardEl; dragId = cardEl.dataset.id;
+  dragEl = cardEl; dragId = cardEl.dataset.id; dragFolderIndex = cardEl.dataset.folderIndex;
   dragSourceCol = cardEl.closest('.col')?.dataset.col ?? null;
   cardEl.classList.add('dragging');
   ghost.textContent = cardEl.querySelector('.card-id').textContent + '  ' + cardEl.querySelector('.card-title').textContent.slice(0,30);
@@ -342,7 +344,7 @@ document.addEventListener('dragstart', e => {
 document.addEventListener('dragend', () => {
   if (dragEl) { dragEl.classList.remove('dragging'); }
   document.querySelectorAll('.card.drop-above,.card.drop-below,.col.drag-over').forEach(c=>c.classList.remove('drop-above','drop-below','drag-over'));
-  dragEl = null; dragId = null; dragSourceCol = null;
+  dragEl = null; dragId = null; dragSourceCol = null; dragFolderIndex = null;
 });
 document.addEventListener('dragover', e => {
   const col = e.target.closest('.col');
@@ -370,7 +372,7 @@ document.addEventListener('drop', e => {
   if (cardEl && dragEl && cardEl !== dragEl && cardEl.closest('.col')?.dataset.col === dragSourceCol) {
     e.preventDefault();
     const rect = cardEl.getBoundingClientRect();
-    vscode.postMessage({ type: 'reorderCard', id: dragId, targetId: cardEl.dataset.id, before: e.clientY < rect.top + rect.height/2 });
+    vscode.postMessage({ type: 'reorderCard', id: dragId, targetId: cardEl.dataset.id, before: e.clientY < rect.top + rect.height/2, folderIndex: dragFolderIndex === undefined ? undefined : Number(dragFolderIndex) });
     return;
   }
   // Move to a column (drop on column or on a card in a different column)
@@ -380,7 +382,7 @@ document.addEventListener('drop', e => {
     col.classList.remove('drag-over');
     const newStatus = col.dataset.col;
     if (dragId && newStatus && dragEl?.dataset.status !== newStatus) {
-      vscode.postMessage({ type: 'moveCard', id: dragId, status: newStatus });
+      vscode.postMessage({ type: 'moveCard', id: dragId, status: newStatus, folderIndex: dragFolderIndex === undefined ? undefined : Number(dragFolderIndex) });
     }
   }
 });
@@ -426,6 +428,7 @@ const PRIORITY_DOT: Record<string, string> = { P0:'#f85149', P1:'#e3b341', P2:'#
 const PRIORITY_LABEL: Record<string, string> = { P0:'Critical', P1:'High', P2:'Medium', P3:'Low' };
 
 function card(issue: Issue, log: TaskLog | null, locale: Locale = 'en'): string {
+	const folderIndex = issue.folderIndex ?? 0;
 	const s = t(locale);
 	const pc = PRIORITY_DOT[issue.priority] ?? '#6e7681';
 	const pl = PRIORITY_LABEL[issue.priority] ?? issue.priority;
@@ -449,17 +452,18 @@ function card(issue: Issue, log: TaskLog | null, locale: Locale = 'en'): string 
 	const criteriaTooltip = criteriaCount > 0 ? issue.acceptanceCriteria.map((ac,i) => `${i+1}. ${ac}`).join('\n') : '';
 
 	let actions = '';
-	if (issue.status === 'todo')        { actions = `<button class="btn btn-run" data-action="runTask" data-id="${idAttr}">${s.run}</button>`; }
+	if (issue.status === 'todo')        { actions = `<button class="btn btn-run" data-action="runTask" data-id="${idAttr}" data-folder-index="${folderIndex}">${s.run}</button>`; }
 	else if (issue.status === 'blocked'){ actions = `<button class="btn btn-disabled" disabled>${s.blocked}</button>`; }
-	else if (issue.status === 'inprogress') { actions = `<button class="btn btn-run" data-action="contextRefresh" data-id="${idAttr}" title="${locale==='es'?'Enviar prompt de recuperación de contexto al chat':'Send context recovery prompt to chat'}">${s.refreshContext}</button><button class="btn btn-done" data-action="markDone" data-id="${idAttr}">${s.markDone}</button>`; }
-	else { actions = `<button class="btn btn-note" data-action="addNote" data-id="${idAttr}" title="${s.addNote === '✎' ? (locale==='es'?'Añadir nota':'Add note') : s.addNote}">${s.addNote}</button><button class="btn btn-reset" data-action="resetTask" data-id="${idAttr}">${s.reset}</button>`; }
+  else if (issue.status === 'failed') { actions = `<button class="btn btn-disabled" disabled>${s.failed}</button>`; }
+	else if (issue.status === 'inprogress') { actions = `<button class="btn btn-run" data-action="contextRefresh" data-id="${idAttr}" data-folder-index="${folderIndex}" title="${locale==='es'?'Enviar prompt de recuperación de contexto al chat':'Send context recovery prompt to chat'}">${s.refreshContext}</button><button class="btn btn-done" data-action="markDone" data-id="${idAttr}" data-folder-index="${folderIndex}">${s.markDone}</button>`; }
+	else { actions = `<button class="btn btn-note" data-action="addNote" data-id="${idAttr}" data-folder-index="${folderIndex}" title="${s.addNote === '✎' ? (locale==='es'?'Añadir nota':'Add note') : s.addNote}">${s.addNote}</button><button class="btn btn-reset" data-action="resetTask" data-id="${idAttr}" data-folder-index="${folderIndex}">${s.reset}</button>`; }
 
-	return `<div class="card" draggable="true" data-id="${idAttr}" data-status="${statusAttr}">
+	return `<div class="card" draggable="true" data-id="${idAttr}" data-status="${statusAttr}" data-folder-index="${folderIndex}">
   <div class="card-header">
-    <div class="card-header-left"><span class="card-id">${esc(issue.id)}</span>${epic}${labels}</div>
+    <div class="card-header-left"><span class="card-id">${esc(issue.folderName ? issue.folderName + "/" : "")}${esc(issue.id)}</span>${epic}${labels}</div>
     <div class="card-header-right"><span class="priority-dot" style="background:${pc}" title="${pl}"></span>${logBadge}</div>
   </div>
-  <div class="card-title" data-action="showEditIssue" data-id="${idAttr}" title="Click to edit">${esc(issue.title)}</div>
+  <div class="card-title" data-action="showEditIssue" data-id="${idAttr}" data-folder-index="${folderIndex}" title="Click to edit">${esc(issue.title)}</div>
   ${issue.description ? `<div class="card-desc">${esc(issue.description.slice(0,100))}${issue.description.length>100?'…':''}</div>` : ''}
   ${noteHtml}${deps}
   <div class="card-footer">
@@ -478,10 +482,11 @@ function boardView(prd: Prd, logs: Record<string, TaskLog>, autoRun: boolean, lo
 		{ key:'inprogress', label: s.colInProgress,  color:'#e3b341' },
 		{ key:'completed',  label: s.colDone,        color:'#3fb950' },
 		{ key:'blocked',    label: s.colBlocked,     color:'#f85149' },
+    { key:'failed',     label: s.colFailed,      color:'#db6d28' },
 	];
 	return `<div class="board">${cols.map(col => {
 		const issues = prd.issues.filter(i => i.status === col.key);
-		const cards  = issues.map(i => card(i, logs[i.id] ?? null, locale)).join('');
+		const cards  = issues.map(i => card(i, logs[String(i.folderIndex ?? 0) + ':' + i.id] ?? logs[i.id] ?? null, locale)).join('');
 		return `<div class="col" data-col="${col.key}">
   <div class="col-header">
     <span class="col-title" style="color:${col.color}">${col.label}</span>
@@ -506,7 +511,7 @@ function epicView(prd: Prd, logs: Record<string, TaskLog>, statuses: Record<stri
     <span class="epic-progress">${done}/${issues.length}</span>
   </div>
   ${depGraph ? `<div class="epic-deps" style="padding:8px 12px;border-bottom:1px solid var(--border)"><div style="font-size:10px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">⛓ ${locale==='es'?'Dependencias':'Dependencies'}</div>${depGraph}</div>` : ''}
-  <div class="epic-cards">${issues.map(i => card(i, logs[i.id]??null, locale)).join('')}</div>
+  <div class="epic-cards">${issues.map(i => card(i, logs[String(i.folderIndex ?? 0) + ':' + i.id] ?? logs[i.id] ?? null, locale)).join('')}</div>
 </div>`;
 	}).join('');
 }
@@ -534,6 +539,7 @@ function statsBar(prd: Prd, cfg: BoardConfig): string {
 	const epics   = [...new Set(prd.issues.map(i=>i.epic).filter(Boolean))];
 	const views   = [['board', s.board],['epic', s.epic],['history', s.history]] as const;
 	const viewBtns = views.map(([v,l]) => `<button class="btn btn-sm ${cfg.view===v?'btn-view-active':''}" data-action="setView" data-id="${escAttr(v)}">${l}</button>`).join('');
+	const scopeSwitch = cfg.showScopeSwitch ? `<div class="view-switcher"><button class="btn btn-sm ${cfg.boardScope==='folder'?'btn-view-active':''}" data-action="setBoardScope" data-id="folder">${locale==='es'?'Proyecto':'Folder'}</button><button class="btn btn-sm ${cfg.boardScope==='workspace'?'btn-view-active':''}" data-action="setBoardScope" data-id="workspace">Workspace</button></div>` : '';
 	const runnerBtn = cfg.autoRun
 		? `<button class="btn btn-sm btn-runner-on" data-action="stopRunner">${s.stop}</button>`
 		: `<button class="btn btn-sm btn-runner-off" data-action="startRunner">${s.autoRun}</button>`;
@@ -555,6 +561,7 @@ function statsBar(prd: Prd, cfg: BoardConfig): string {
   </div>
   <div class="epics-row">${epics.map(e=>`<span class="epic-chip">${esc(e!)}</span>`).join('')}</div>
   <div class="stats-actions">
+    ${scopeSwitch}
     <div class="view-switcher">${viewBtns}</div>
     ${runnerBtn}
     <button class="btn btn-sm btn-github" data-action="pushToGitHub" title="${locale==='es'?'Subir a GitHub':'Push to GitHub'}">${s.pushGithub}</button>
@@ -600,6 +607,7 @@ function emptyState(locale: Locale = 'en'): string {
   <div style="display:flex;gap:8px;margin-top:8px">
     <button class="btn btn-primary" data-action="initProject">${s.initProject}</button>
     <button class="btn btn-primary" data-action="importPlan" style="background:#1f6feb;border-color:#1f6feb">${s.importPlan}</button>
+    <button class="btn btn-primary" data-action="analyzeProject" style="background:#8957e5;border-color:#8957e5">${s.analyzeProject}</button>
   </div>
   <div class="empty-hint">${s.emptyHint}</div>
 </div>`;

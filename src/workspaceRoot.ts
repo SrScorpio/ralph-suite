@@ -4,7 +4,7 @@ import { DEFAULT_PRD_PATH, PrdManager } from './prdManager';
 /**
  * Prefers the multi-root folder that has a resolvable PRD (docs/ralph/prd.json
  * or legacy root prd.json). Honours `prdPath`. Traversal is rejected by
- * PrdManager.prdPath. Falls back to folder[0].
+ * PrdManager.prdPath. Returns undefined when no folder is allowlisted by its PRD.
  */
 export function resolveWorkspaceRoot(
 	folders: readonly string[] | undefined,
@@ -15,5 +15,5 @@ export function resolveWorkspaceRoot(
 	for (const folder of folders) {
 		if (exists(PrdManager.prdPath(folder, configuredPath, exists))) { return folder; }
 	}
-	return folders[0];
+	return undefined;
 }

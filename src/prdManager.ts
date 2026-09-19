@@ -25,10 +25,12 @@ export interface Issue {
 	description: string;
 	epic?: string;
 	priority: 'P0' | 'P1' | 'P2' | 'P3';
-	status: 'todo' | 'inprogress' | 'completed' | 'blocked';
+	status: 'todo' | 'inprogress' | 'completed' | 'blocked' | 'failed';
 	acceptanceCriteria: string[];
 	dependencies: string[];
 	labels: string[];
+	folderIndex?: number;
+	folderName?: string;
 }
 
 export interface Prd {
@@ -79,6 +81,7 @@ function normalizeStatus(raw: string | undefined): Issue['status'] {
 	if (s === 'inprogress' || s === 'in_progress' || s === 'in-progress') { return 'inprogress'; }
 	if (s === 'completed'  || s === 'done')  { return 'completed'; }
 	if (s === 'blocked')   { return 'blocked'; }
+	if (s === 'failed')    { return 'failed'; }
 	return 'todo';
 }
 
@@ -216,7 +219,8 @@ export class PrdManager {
 				}
 				if (issue.status === 'todo' && issue.dependencies.length > 0) {
 					const blocked = issue.dependencies.some(dep =>
-						(statuses[dep] ?? 'todo') !== 'completed'
+						statuses[dep] !== 'completed'
+						&& prd.issues.find(candidate => candidate.id === dep)?.status !== 'completed'
 					);
 					if (blocked) { issue.status = 'blocked'; }
 				}
@@ -237,7 +241,7 @@ export class PrdManager {
 
 	static stats(prd: Prd) {
 		const total = prd.issues.length;
-		const byStatus = { todo: 0, inprogress: 0, completed: 0, blocked: 0 };
+		const byStatus = { todo: 0, inprogress: 0, completed: 0, blocked: 0, failed: 0 };
 		for (const i of prd.issues) { byStatus[i.status] = (byStatus[i.status] ?? 0) + 1; }
 		const byEpic: Record<string, number> = {};
 		for (const i of prd.issues) { const e = i.epic || 'General'; byEpic[e] = (byEpic[e] ?? 0) + 1; }

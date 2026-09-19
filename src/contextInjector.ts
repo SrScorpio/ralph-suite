@@ -12,7 +12,7 @@
  */
 
 import * as fs from 'fs';
-import * as path from 'path';
+import { RalphStateManager } from './stateManager';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -244,9 +244,7 @@ export function loadAndInjectContext(
 	taskEpic?: string,
 	configuredMemoriesPath: string = '.agent/memories.md'
 ): InjectionResult | null {
-	const memoriesPath = path.isAbsolute(configuredMemoriesPath)
-		? configuredMemoriesPath
-		: path.join(workspaceRoot, configuredMemoriesPath);
+	const memoriesPath = RalphStateManager.memoriesPath(workspaceRoot, configuredMemoriesPath);
 	if (!fs.existsSync(memoriesPath)) {
 		return null;
 	}
