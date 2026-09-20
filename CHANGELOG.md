@@ -12,6 +12,15 @@ All notable changes to Ralph Suite are documented here.
 
 ### Fixed
 
+## [1.11.2] - 2026-09-20
+
+### Changed
+- Kanban carga PRDs de Analyze con `tasks`, `projectName`, ids numéricos, `planned`, `acceptance` y `phase`.
+- El board registra `Board loaded N issues`.
+
+### Fixed
+- El estado vacío se muestra cuando hay 0 issues.
+
 ## [1.11.1] - 2026-09-20
 
 ### Fixed

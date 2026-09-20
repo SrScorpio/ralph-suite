@@ -7,10 +7,10 @@ Inspired by the [RALPH Wiggum technique](https://github.com/badlogic/lemmy/issue
 
 ## Install (GitHub Releases, no Marketplace)
 
-Ralph Suite is **not** on the Visual Studio Marketplace. Install the VSIX from [GitHub Releases](https://github.com/SrScorpio/ralph-suite/releases). The published asset is `ralph-suite-1.11.1.vsix`.
+Ralph Suite is **not** on the Visual Studio Marketplace. Install the VSIX from [GitHub Releases](https://github.com/SrScorpio/ralph-suite/releases). The published asset is `ralph-suite-1.11.2.vsix`.
 
 1. Open the latest [GitHub Release](https://github.com/SrScorpio/ralph-suite/releases)
-2. Download `ralph-suite-1.11.1.vsix`
+2. Download `ralph-suite-1.11.2.vsix`
 3. VS Code → Extensions → ⋯ → **Install from VSIX…** → select the file
 
 To build from source instead:
@@ -27,7 +27,7 @@ npm run compile
 
 # 4. Package as .vsix
 npm run package
-# → creates ralph-suite-1.11.1.vsix
+# → creates ralph-suite-1.11.2.vsix
 
 # 5. Install in VS Code
 # Extensions panel → ⋯ → Install from VSIX → select the file
