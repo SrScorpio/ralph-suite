@@ -60,8 +60,12 @@ describe('workspace root for Alfred / multi-root', () => {
 			resolveWorkspaceRoot([first, second], 'prd.json', (candidate) => candidate === prd),
 			second,
 		);
-		assert.strictEqual(resolveWorkspaceRoot([first], 'prd.json', () => false), undefined);
 		assert.strictEqual(resolveWorkspaceRoot([], 'prd.json', () => true), undefined);
+	});
+
+	it('falls back to the first folder when no folder contains prd.json', () => {
+		const first = path.join(os.tmpdir(), 'ralph-root-without-prd');
+		assert.strictEqual(resolveWorkspaceRoot([first], 'prd.json', () => false), first);
 	});
 
 	it('does not follow prdPath outside the folder', () => {
