@@ -41,12 +41,14 @@ export interface Prd {
 }
 
 interface RawItem {
-	id: string;
-	title: string;
+	id: unknown;
+	title?: unknown;
 	description?: string;
 	acceptanceCriteria?: string[];
+	acceptance?: string[];
 	priority?: number | string;
 	epic?: string;
+	phase?: string;
 	labels?: string[];
 	dependencies?: string[];
 	status?: string;
@@ -54,7 +56,9 @@ interface RawItem {
 
 interface RawPrd {
 	project?: string;
+	projectName?: string;
 	description?: string;
+	story?: string;
 	version?: string;
 	issues?: RawItem[];
 	userStories?: RawItem[];
@@ -110,7 +114,10 @@ function normalizeStatus(raw: string | undefined): Issue['status'] {
 }
 
 function asString(raw: unknown, fallback = ''): string {
-	return typeof raw === 'string' ? raw.trim() : fallback;
+	if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') {
+		return String(raw).trim();
+	}
+	return fallback;
 }
 
 function asStringArray(raw: unknown): string[] {
@@ -135,14 +142,17 @@ function uniqueId(rawId: unknown, index: number, usedIds: Set<string>): string {
 }
 
 function normalizeItem(raw: RawItem, index: number, usedIds: Set<string>): Issue {
+	const description = asString(raw.description);
+	const title = asString(raw.title, description.split(/\r?\n/, 1)[0] || 'Untitled task');
+	const acceptanceCriteria = asStringArray(raw.acceptanceCriteria);
 	return {
 		id:                 uniqueId(raw.id, index, usedIds),
-		title:              asString(raw.title, 'Untitled task').slice(0, 240),
-		description:        asString(raw.description).slice(0, 4000),
-		epic:               raw.epic ? asString(raw.epic).slice(0, 120) : undefined,
+		title:              title.slice(0, 240),
+		description:        description.slice(0, 4000),
+		epic:               asString(raw.epic, asString(raw.phase)).slice(0, 120) || undefined,
 		priority:           normalizePriority(raw.priority),
 		status:             normalizeStatus(raw.status),
-		acceptanceCriteria: asStringArray(raw.acceptanceCriteria),
+		acceptanceCriteria: acceptanceCriteria.length > 0 ? acceptanceCriteria : asStringArray(raw.acceptance),
 		dependencies:       asStringArray(raw.dependencies).map(safeTaskId),
 		labels:             asStringArray(raw.labels).map(l => l.slice(0, 80)),
 	};
@@ -240,8 +250,8 @@ export class PrdManager {
 				.filter((item): item is RawItem => !!item && typeof item === 'object')
 				.map((item, index) => normalizeItem(item, index, usedIds));
 			const prd: Prd = {
-				project:     asString(raw.project, 'Unnamed Project').slice(0, 160),
-				description: asString(raw.description).slice(0, 2000),
+				project:     asString(raw.project, asString(raw.projectName, 'Unnamed Project')).slice(0, 160),
+				description: asString(raw.description, asString(raw.story)).slice(0, 2000),
 				version:     asString(raw.version, '1.0.0').slice(0, 40),
 				issues,
 			};

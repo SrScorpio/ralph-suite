@@ -145,6 +145,31 @@ describe('ISSUE-003 docs/ layout and docs/ralph/prd.json', () => {
 		}
 	});
 
+	it('loads Analyze task schemas with projectName, story, numeric IDs, and planned status', () => {
+		const modernDir = path.join(tmpDir, 'docs', 'ralph');
+		fs.mkdirSync(modernDir, { recursive: true });
+		fs.writeFileSync(path.join(modernDir, 'prd.json'), JSON.stringify({
+			projectName: 'WebTest — Herramientas de gestión de almacén',
+			story: 'Aplicación para gestionar almacenes.',
+			tasks: [1, 2, 3, 4].map((id) => ({
+				id,
+				description: id === 1 ? 'Inicializar repositorio y estructura base' : `Implementar tarea ${id}`,
+				status: 'planned',
+				phase: 'setup',
+				acceptance: ['La tarea queda implementada.'],
+			})),
+		}), 'utf-8');
+
+		const prd = PrdManager.load(tmpDir)!;
+		assert.strictEqual(prd.project, 'WebTest — Herramientas de gestión de almacén');
+		assert.strictEqual(prd.issues.length, 4);
+		assert.strictEqual(prd.issues[0].id, '1');
+		assert.ok(prd.issues[0].title.includes('Inicializar repositorio'));
+		assert.strictEqual(prd.issues[0].status, 'todo');
+		assert.strictEqual(prd.issues[0].epic, 'setup');
+		assert.ok(prd.issues[0].acceptanceCriteria.length > 0);
+	});
+
 	it('creates docs/ralph when saving a new PRD at the default path', () => {
 		PrdManager.saveRaw(tmpDir, {
 			project: 'fresh',

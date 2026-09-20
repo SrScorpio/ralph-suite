@@ -59,7 +59,7 @@ describe('PRD normalization', () => {
 
 		const prd = PrdManager.load(tmpDir);
 		assert.ok(prd);
-		assert.strictEqual(prd!.project, 'Unnamed Project');
+		assert.strictEqual(prd!.project, '42');
 		assert.strictEqual(prd!.issues[0].id, safeTaskId('../bad id'));
 		assert.notStrictEqual(prd!.issues[0].id, prd!.issues[1].id);
 		assert.deepStrictEqual(prd!.issues[0].labels, []);
