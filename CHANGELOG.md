@@ -12,6 +12,11 @@ All notable changes to Ralph Suite are documented here.
 
 ### Fixed
 
+## [1.11.1] - 2026-09-20
+
+### Fixed
+- Open Board / Init funcionan sin `prd.json`: usan `folders[0]` como fallback. El mensaje "No workspace open" solo aparece cuando no existen `workspaceFolders`.
+
 ## [1.11.0] - 2026-09-19
 
 ### Added
