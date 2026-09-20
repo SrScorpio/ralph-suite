@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { DEFAULT_PRD_PATH, LEGACY_PRD_PATH, PrdManager, prdWatchPattern } from '../prdManager';
+import { DEFAULT_PRD_PATH, LEGACY_PRD_PATH, PrdManager, countRecognizedItems, prdWatchPattern } from '../prdManager';
 import { resolveWorkspaceRoot } from '../workspaceRoot';
 import {
 	buildAgentsMd,
@@ -120,6 +120,29 @@ describe('ISSUE-003 docs/ layout and docs/ralph/prd.json', () => {
 		assert.strictEqual(prd.issues[0].id, 'ISSUE-001');
 		const leftover = JSON.parse(fs.readFileSync(path.join(tmpDir, LEGACY_PRD_PATH), 'utf-8'));
 		assert.strictEqual(leftover.project, 'legacy-root');
+	});
+
+	it('uses the legacy PRD when the modern PRD exists but has no issues', () => {
+		const modernDir = path.join(tmpDir, 'docs', 'ralph');
+		fs.mkdirSync(modernDir, { recursive: true });
+		fs.writeFileSync(path.join(modernDir, 'prd.json'), JSON.stringify({ project: 'modern', issues: [] }), 'utf-8');
+		fs.writeFileSync(path.join(tmpDir, LEGACY_PRD_PATH), JSON.stringify({
+			project: 'legacy-root',
+			issues: [{ id: 'ISSUE-001', title: 'Legacy issue' }],
+		}), 'utf-8');
+
+		assert.strictEqual(countRecognizedItems({ issues: [] }), 0);
+		assert.strictEqual(countRecognizedItems({ tasks: [{ id: 'ISSUE-001' }] }), 1);
+		assert.strictEqual(PrdManager.prdPath(tmpDir), path.join(tmpDir, LEGACY_PRD_PATH));
+		assert.strictEqual(PrdManager.load(tmpDir)!.issues[0].id, 'ISSUE-001');
+	});
+
+	it('loads tasks, items, and stories when issues and userStories are absent', () => {
+		for (const key of ['tasks', 'items', 'stories']) {
+			const raw = { [key]: [{ id: `ISSUE-${key}`, title: key }] };
+			fs.writeFileSync(path.join(tmpDir, LEGACY_PRD_PATH), JSON.stringify(raw), 'utf-8');
+			assert.strictEqual(PrdManager.load(tmpDir)!.issues[0].id, `ISSUE-${key}`);
+		}
 	});
 
 	it('creates docs/ralph when saving a new PRD at the default path', () => {

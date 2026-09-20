@@ -58,6 +58,30 @@ interface RawPrd {
 	version?: string;
 	issues?: RawItem[];
 	userStories?: RawItem[];
+	tasks?: RawItem[];
+	items?: RawItem[];
+	stories?: RawItem[];
+}
+
+const RECOGNIZED_ITEM_KEYS = ['issues', 'userStories', 'tasks', 'items', 'stories'] as const;
+
+function recognizedItems(raw: any): any[] | null {
+	for (const key of RECOGNIZED_ITEM_KEYS) {
+		if (Array.isArray(raw?.[key])) { return raw[key]; }
+	}
+	return null;
+}
+
+export function countRecognizedItems(raw: unknown): number {
+	return recognizedItems(raw)?.length ?? 0;
+}
+
+function readJsonFile(filePath: string): any | null {
+	try {
+		return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+	} catch {
+		return null;
+	}
 }
 
 function normalizePriority(raw: number | string | undefined): 'P0' | 'P1' | 'P2' | 'P3' {
@@ -135,7 +159,17 @@ export class PrdManager {
 		if (isDefaultPrdPathSetting(configuredPath)) {
 			const modern = path.join(rootPath, DEFAULT_PRD_PATH);
 			const legacy = path.join(rootPath, LEGACY_PRD_PATH);
-			if (exists(modern)) { return modern; }
+			if (exists(modern)) {
+				if (fs.existsSync(modern)) {
+					const modernRaw = readJsonFile(modern);
+					if (modernRaw === null) { return modern; }
+					if (countRecognizedItems(modernRaw) === 0 && exists(legacy) && fs.existsSync(legacy)) {
+						const legacyRaw = readJsonFile(legacy);
+						if (legacyRaw !== null && countRecognizedItems(legacyRaw) > 0) { return legacy; }
+					}
+				}
+				return modern;
+			}
 			if (exists(legacy)) { return legacy; }
 			return modern;
 		}
@@ -150,15 +184,16 @@ export class PrdManager {
 	}
 
 	static rawItems(raw: any): any[] {
-		if (Array.isArray(raw?.issues)) { return raw.issues; }
-		if (Array.isArray(raw?.userStories)) { return raw.userStories; }
+		const items = recognizedItems(raw);
+		if (items) { return items; }
 		raw.issues = [];
 		return raw.issues;
 	}
 
 	static setRawItems(raw: any, items: any[]): void {
-		if (Array.isArray(raw?.issues)) { raw.issues = items; return; }
-		if (Array.isArray(raw?.userStories)) { raw.userStories = items; return; }
+		for (const key of RECOGNIZED_ITEM_KEYS) {
+			if (Array.isArray(raw?.[key])) { raw[key] = items; return; }
+		}
 		raw.issues = items;
 	}
 
@@ -199,9 +234,7 @@ export class PrdManager {
 		try {
 			const raw = this.loadRaw(root, configuredPath) as RawPrd | null;
 			if (!raw) { return null; }
-			const rawItems: RawItem[] = Array.isArray(raw.issues)
-				? raw.issues
-				: Array.isArray(raw.userStories) ? raw.userStories : [];
+			const rawItems: RawItem[] = recognizedItems(raw) ?? [];
 			const usedIds = new Set<string>();
 			const issues: Issue[] = rawItems
 				.filter((item): item is RawItem => !!item && typeof item === 'object')

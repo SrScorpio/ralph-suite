@@ -402,6 +402,7 @@ export function getBoardContent(
 ): string {
 	const locale = cfg.locale ?? 'en';
 	if (!prd) { return emptyState(locale); }
+  if (prd.issues.length === 0) { return emptyState(locale, true); }
 	const bar = statsBar(prd, cfg);
 	if (cfg.view === 'history') { return bar + historyView(logs, locale); }
 	if (cfg.view === 'epic')    { return bar + epicView(prd, logs, statuses, locale); }
@@ -598,12 +599,12 @@ function memoriesPanel(memories: string): string {
 </details>`;
 }
 
-function emptyState(locale: Locale = 'en'): string {
+function emptyState(locale: Locale = 'en', hasEmptyPrd = false): string {
 	const s = t(locale);
 	return `<div class="empty-state">
   <div class="empty-icon">🚀</div>
-  <div class="empty-title">${s.emptyNoPrd}</div>
-  <div class="empty-sub">${s.emptyNoPrdSub}</div>
+  <div class="empty-title">${hasEmptyPrd ? s.emptyNoIssues : s.emptyNoPrd}</div>
+  <div class="empty-sub">${hasEmptyPrd ? s.emptyNoIssuesSub : s.emptyNoPrdSub}</div>
   <div style="display:flex;gap:8px;margin-top:8px">
     <button class="btn btn-primary" data-action="initProject">${s.initProject}</button>
     <button class="btn btn-primary" data-action="importPlan" style="background:#1f6feb;border-color:#1f6feb">${s.importPlan}</button>
