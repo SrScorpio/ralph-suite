@@ -19,6 +19,8 @@ export interface UIStrings {
 	// Empty state
 	emptyNoPrd: string;
 	emptyNoPrdSub: string;
+	emptyNoIssues: string;
+	emptyNoIssuesSub: string;
 	initProject: string;
 	analyzeProject: string;
 	importPlan: string;
@@ -121,6 +123,8 @@ export interface UIStrings {
 const en: UIStrings = {
 	emptyNoPrd: 'No prd.json found',
 	emptyNoPrdSub: 'Generate one from a project description or import a Plan.',
+	emptyNoIssues: 'This PRD has no issues',
+	emptyNoIssuesSub: 'The PRD exists, but its issues array is empty. Analyze the project or add an issue to populate the board.',
 	initProject: 'Start New Project',
 	analyzeProject: 'Analyze Existing Project',
 	importPlan: '⬇ Import Plan',
@@ -209,6 +213,8 @@ const en: UIStrings = {
 const es: UIStrings = {
 	emptyNoPrd: 'No se encontró prd.json',
 	emptyNoPrdSub: 'Genera uno desde una descripción de proyecto o importa un Plan.',
+	emptyNoIssues: 'Este PRD no tiene issues',
+	emptyNoIssuesSub: 'El PRD existe, pero su array de issues está vacío. Analiza el proyecto o añade una issue para llenar el tablero.',
 	initProject: 'Iniciar proyecto nuevo',
 	analyzeProject: 'Analizar proyecto existente',
 	importPlan: '⬇ Importar Plan',

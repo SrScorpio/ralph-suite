@@ -37,6 +37,8 @@ describe('workspace folders and analyze prompt', () => {
     assert.ok(prompt.includes('Do NOT modify prd.json if it already exists'));
     assert.ok(prompt.includes('Definir el siguiente requerimiento'));
     assert.ok(prompt.includes('never invent chat history'));
+    assert.ok(prompt.includes('"issues"'));
+    assert.ok(prompt.includes('Use the key "issues" (not tasks)'));
   });
 
   it('empty state offers new project, import, and analyze actions', () => {
@@ -50,5 +52,12 @@ describe('workspace folders and analyze prompt', () => {
     assert.ok(html.includes('data-action="initProject"'));
     assert.ok(html.includes('data-action="importPlan"'));
     assert.ok(html.includes('data-action="analyzeProject"'));
+  });
+
+  it('explains when an existing PRD has no issues', () => {
+    const html = getBoardContent({ project: 'Empty', description: '', version: '1.0.0', issues: [] }, null, {}, { autoRun: false, maxLoops: 1, guardrails: [], boundaries: [], view: 'board', locale: 'es' });
+    assert.ok(html.includes(t('es').emptyNoIssues));
+    assert.ok(html.includes(t('es').emptyNoIssuesSub));
+    assert.ok(!html.includes('class="stats-bar"'));
   });
 });

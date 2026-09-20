@@ -145,6 +145,11 @@ export class KanbanPanel {
 		if (this.disposed) { return; }
 		try {
 			const prd      = this.aggregatedPrd();
+			const loadedPaths = this.scopedFolders()
+				.filter(folder => !!PrdManager.load(folder.root, this.prdPathSetting()))
+				.map(folder => path.relative(this.root, PrdManager.prdPath(folder.root, this.prdPathSetting())).replace(/\\/g, '/') || '.')
+				.join(', ');
+			KanbanPanel.output?.appendLine(`[Ralph] Board loaded ${prd?.issues.length ?? 0} issues from ${loadedPaths || 'none'}`);
 			const memories = this.loadFile(RalphStateManager.memoriesPath(this.root, this.memoriesPathSetting()));
 			const logs     = this.loadLogs();
 			const cfg      = this.getBoardConfig();

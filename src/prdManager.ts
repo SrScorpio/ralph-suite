@@ -41,12 +41,14 @@ export interface Prd {
 }
 
 interface RawItem {
-	id: string;
-	title: string;
+	id: unknown;
+	title?: unknown;
 	description?: string;
 	acceptanceCriteria?: string[];
+	acceptance?: string[];
 	priority?: number | string;
 	epic?: string;
+	phase?: string;
 	labels?: string[];
 	dependencies?: string[];
 	status?: string;
@@ -54,10 +56,36 @@ interface RawItem {
 
 interface RawPrd {
 	project?: string;
+	projectName?: string;
 	description?: string;
+	story?: string;
 	version?: string;
 	issues?: RawItem[];
 	userStories?: RawItem[];
+	tasks?: RawItem[];
+	items?: RawItem[];
+	stories?: RawItem[];
+}
+
+const RECOGNIZED_ITEM_KEYS = ['issues', 'userStories', 'tasks', 'items', 'stories'] as const;
+
+function recognizedItems(raw: any): any[] | null {
+	for (const key of RECOGNIZED_ITEM_KEYS) {
+		if (Array.isArray(raw?.[key])) { return raw[key]; }
+	}
+	return null;
+}
+
+export function countRecognizedItems(raw: unknown): number {
+	return recognizedItems(raw)?.length ?? 0;
+}
+
+function readJsonFile(filePath: string): any | null {
+	try {
+		return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+	} catch {
+		return null;
+	}
 }
 
 function normalizePriority(raw: number | string | undefined): 'P0' | 'P1' | 'P2' | 'P3' {
@@ -86,7 +114,10 @@ function normalizeStatus(raw: string | undefined): Issue['status'] {
 }
 
 function asString(raw: unknown, fallback = ''): string {
-	return typeof raw === 'string' ? raw.trim() : fallback;
+	if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') {
+		return String(raw).trim();
+	}
+	return fallback;
 }
 
 function asStringArray(raw: unknown): string[] {
@@ -111,14 +142,17 @@ function uniqueId(rawId: unknown, index: number, usedIds: Set<string>): string {
 }
 
 function normalizeItem(raw: RawItem, index: number, usedIds: Set<string>): Issue {
+	const description = asString(raw.description);
+	const title = asString(raw.title, description.split(/\r?\n/, 1)[0] || 'Untitled task');
+	const acceptanceCriteria = asStringArray(raw.acceptanceCriteria);
 	return {
 		id:                 uniqueId(raw.id, index, usedIds),
-		title:              asString(raw.title, 'Untitled task').slice(0, 240),
-		description:        asString(raw.description).slice(0, 4000),
-		epic:               raw.epic ? asString(raw.epic).slice(0, 120) : undefined,
+		title:              title.slice(0, 240),
+		description:        description.slice(0, 4000),
+		epic:               asString(raw.epic, asString(raw.phase)).slice(0, 120) || undefined,
 		priority:           normalizePriority(raw.priority),
 		status:             normalizeStatus(raw.status),
-		acceptanceCriteria: asStringArray(raw.acceptanceCriteria),
+		acceptanceCriteria: acceptanceCriteria.length > 0 ? acceptanceCriteria : asStringArray(raw.acceptance),
 		dependencies:       asStringArray(raw.dependencies).map(safeTaskId),
 		labels:             asStringArray(raw.labels).map(l => l.slice(0, 80)),
 	};
@@ -135,7 +169,17 @@ export class PrdManager {
 		if (isDefaultPrdPathSetting(configuredPath)) {
 			const modern = path.join(rootPath, DEFAULT_PRD_PATH);
 			const legacy = path.join(rootPath, LEGACY_PRD_PATH);
-			if (exists(modern)) { return modern; }
+			if (exists(modern)) {
+				if (fs.existsSync(modern)) {
+					const modernRaw = readJsonFile(modern);
+					if (modernRaw === null) { return modern; }
+					if (countRecognizedItems(modernRaw) === 0 && exists(legacy) && fs.existsSync(legacy)) {
+						const legacyRaw = readJsonFile(legacy);
+						if (legacyRaw !== null && countRecognizedItems(legacyRaw) > 0) { return legacy; }
+					}
+				}
+				return modern;
+			}
 			if (exists(legacy)) { return legacy; }
 			return modern;
 		}
@@ -150,15 +194,16 @@ export class PrdManager {
 	}
 
 	static rawItems(raw: any): any[] {
-		if (Array.isArray(raw?.issues)) { return raw.issues; }
-		if (Array.isArray(raw?.userStories)) { return raw.userStories; }
+		const items = recognizedItems(raw);
+		if (items) { return items; }
 		raw.issues = [];
 		return raw.issues;
 	}
 
 	static setRawItems(raw: any, items: any[]): void {
-		if (Array.isArray(raw?.issues)) { raw.issues = items; return; }
-		if (Array.isArray(raw?.userStories)) { raw.userStories = items; return; }
+		for (const key of RECOGNIZED_ITEM_KEYS) {
+			if (Array.isArray(raw?.[key])) { raw[key] = items; return; }
+		}
 		raw.issues = items;
 	}
 
@@ -199,16 +244,14 @@ export class PrdManager {
 		try {
 			const raw = this.loadRaw(root, configuredPath) as RawPrd | null;
 			if (!raw) { return null; }
-			const rawItems: RawItem[] = Array.isArray(raw.issues)
-				? raw.issues
-				: Array.isArray(raw.userStories) ? raw.userStories : [];
+			const rawItems: RawItem[] = recognizedItems(raw) ?? [];
 			const usedIds = new Set<string>();
 			const issues: Issue[] = rawItems
 				.filter((item): item is RawItem => !!item && typeof item === 'object')
 				.map((item, index) => normalizeItem(item, index, usedIds));
 			const prd: Prd = {
-				project:     asString(raw.project, 'Unnamed Project').slice(0, 160),
-				description: asString(raw.description).slice(0, 2000),
+				project:     asString(raw.project, asString(raw.projectName, 'Unnamed Project')).slice(0, 160),
+				description: asString(raw.description, asString(raw.story)).slice(0, 2000),
 				version:     asString(raw.version, '1.0.0').slice(0, 40),
 				issues,
 			};
