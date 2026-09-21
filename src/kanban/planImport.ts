@@ -71,7 +71,7 @@ export function importPlanToPrd(markdown: string): ImportedPrd | null {
 			if (currentStep) { issues.push(currentStep); }
 			stepNum++;
 			currentStep = {
-				id: `STEP-${String(stepNum).padStart(3, '0')}`,
+				id: generateNextId(issues.map(i => String(i.id))),
 				title: stepTitle[1].trim(),
 				description: '',
 				epic: undefined,
@@ -86,7 +86,7 @@ export function importPlanToPrd(markdown: string): ImportedPrd | null {
 			if (currentStep) { issues.push(currentStep); }
 			stepNum++;
 			currentStep = {
-				id: `STEP-${String(stepNum).padStart(3, '0')}`,
+				id: generateNextId(issues.map(i => String(i.id))),
 				title: h3Step[1].trim(),
 				description: '',
 				epic: undefined,
@@ -166,31 +166,56 @@ export function importPlanToPrd(markdown: string): ImportedPrd | null {
 
 // ── ID generation ────────────────────────────────────────────────────────────
 
+/** Canonical format for NEW backlog IDs: at least 3 letters, optional -/_, then digits. */
+export const NEW_BACKLOG_ID_RE = /^[A-Za-z]{3,}[-_]?[0-9]+$/;
+
+export function isValidNewBacklogId(id: unknown): boolean {
+	return typeof id === 'string' && NEW_BACKLOG_ID_RE.test(id);
+}
+
+function numericSuffix(id: unknown): number | null {
+	const match = String(id ?? '').match(/(\d+)$/);
+	if (!match) { return null; }
+	const value = parseInt(match[1], 10);
+	return Number.isFinite(value) ? value : null;
+}
+
 export function generateNextId(existingIds: string[]): string {
-	// Detect format from existing IDs: US-001, ISSUE-001, STEP-001, TASK-001
-	const patterns = [
-		{ re: /^(US)-(\d+)$/, prefix: 'US' },
-		{ re: /^(ISSUE)-(\d+)$/, prefix: 'ISSUE' },
-		{ re: /^(STEP)-(\d+)$/, prefix: 'STEP' },
-		{ re: /^(TASK)-(\d+)$/, prefix: 'TASK' },
-	];
-
-	for (const { re, prefix } of patterns) {
-		const nums = existingIds
-			.map(id => { const m = id.match(re); return m ? parseInt(m[2], 10) : null; })
-			.filter((n): n is number => n !== null);
-		if (nums.length > 0) {
-			const next = Math.max(...nums) + 1;
-			return `${prefix}-${String(next).padStart(3, '0')}`;
-		}
-	}
-
-	// Fallback: ISSUE-NNN
-	const fallbackNums = existingIds
-		.map(id => { const m = id.match(/(\d+)$/); return m ? parseInt(m[1], 10) : null; })
+	const nums = existingIds
+		.map(numericSuffix)
 		.filter((n): n is number => n !== null);
-	const next = fallbackNums.length > 0 ? Math.max(...fallbackNums) + 1 : 1;
+	const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
 	return `ISSUE-${String(next).padStart(3, '0')}`;
+}
+
+export function allocateNewBacklogId(proposed: unknown, existingIds: string[]): string {
+	const id = String(proposed ?? '').trim();
+	if (isValidNewBacklogId(id) && !existingIds.includes(id)) {
+		return id;
+	}
+	return generateNextId(existingIds);
+}
+
+export function persistNewBacklogItem<T extends Record<string, unknown>>(item: T, existingIds: string[]): T & { id: string } {
+	return { ...item, id: allocateNewBacklogId(item.id, existingIds) };
+}
+
+export function applyEditedBacklogId(original: string, proposed: unknown, existingIds: string[]): string {
+	if (proposed === undefined || proposed === null) { return original; }
+	const next = String(proposed).trim();
+	if (!next || next === original) { return original; }
+	const others = existingIds.filter(id => id !== original);
+	if (isValidNewBacklogId(next) && !others.includes(next)) { return next; }
+	return original;
+}
+
+export function appendImportedIssues<T extends { id: unknown }>(existing: T[], imported: T[]): T[] {
+	const existingIds = new Set(existing.map(item => String(item.id)));
+	return imported.map(item => {
+		const persisted = persistNewBacklogItem(item, [...existingIds]);
+		existingIds.add(persisted.id);
+		return persisted;
+	});
 }
 
 // ── Add from Chat prompt ─────────────────────────────────────────────────────
@@ -208,10 +233,12 @@ export function buildAddFromChatPrompt(prd: Prd | null, prdPath: string): string
 		`Next available ID: ${nextId}`,
 		`prd.json location: \`${prdPath.replace(/\\/g, '/')}\``,
 		``,
+		`Use ISSUE-NNN (padding 3). Do not use numeric-only IDs (1 or 001). Do not infer GitHub #N from the local ID.`,
+		``,
 		`Please ask me what I want to add (in natural language), then:`,
 		`1. Break it down into one or more concrete issues`,
 		`2. For each issue generate a JSON object following this schema:`,
-		`   - id: string starting from ${nextId} (increment for each new issue)`,
+		`   - id: string starting from ${nextId} (increment for each new ISSUE-NNN)`,
 		`   - title: short descriptive title`,
 		`   - description: what needs to be done`,
 		`   - epic: pick from existing epics or create a new one`,

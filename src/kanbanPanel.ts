@@ -6,7 +6,7 @@ import { RalphStateManager, TaskLog, safeTaskId } from './stateManager';
 import { getShellHtml, getBoardContent, BoardConfig } from './webview/kanbanHtml';
 import { buildPushPrompt, buildSyncPrompt } from './kanban/gitHubSync';
 import { buildContextRefreshPrompt } from './kanban/contextRefresh';
-import { importPlanToPrd, generateNextId, buildAddFromChatPrompt } from './kanban/planImport';
+import { importPlanToPrd, buildAddFromChatPrompt, persistNewBacklogItem, applyEditedBacklogId, appendImportedIssues } from './kanban/planImport';
 import { sendToChat } from './chatLauncher';
 import { pendingTasksMessage } from './commands/task';
 import { safeMessageId, isBoardStatus, cleanText, cleanTextArray, cleanPriority, cleanIssueFields, getNonce } from './boardSanitizers';
@@ -550,12 +550,16 @@ export class KanbanPanel {
 				const fields = cleanIssueFields(msg.fields);
 				if (!id || !fields) { break; }
 				if (!fields.title) { break; }
+				const proposedId = msg.fields && typeof msg.fields === 'object' && Object.prototype.hasOwnProperty.call(msg.fields, 'id')
+					? msg.fields.id
+					: undefined;
 				try {
 					const changed = PrdManager.mutateRaw(this.folderFromMessage(msg)?.root ?? this.root, (_raw, items) => {
-						const idx = items.findIndex((i: any) => i.id === id);
+						const idx = items.findIndex((i: any) => String(i.id) === id);
 						if (idx === -1) { return false; }
-						// Merge allowlisted fields only.
-						items[idx] = { ...items[idx], ...fields };
+						const existingIds = items.map((i: any) => String(i.id ?? ''));
+						const nextId = applyEditedBacklogId(id, proposedId, existingIds);
+						items[idx] = { ...items[idx], ...fields, id: nextId };
 					}, this.prdPathSetting());
 					if (!changed) { break; }
 					this.render();
@@ -575,11 +579,9 @@ export class KanbanPanel {
 				let newId = '';
 				try {
 					const changed = PrdManager.mutateRaw(this.folderFromMessage(msg)?.root ?? this.root, (_raw, items) => {
-						// Generate next ID based on existing format
-						const existingIds: string[] = items.map((i: any) => i.id ?? '');
-						newId = generateNextId(existingIds);
-						items.push({
-							id:                 newId,
+						const existingIds: string[] = items.map((i: any) => String(i.id ?? ''));
+						const persisted = persistNewBacklogItem({
+							id:                 msg.issue?.id,
 							title:              fields.title,
 							description:        fields.description ?? '',
 							epic:               fields.epic,
@@ -587,8 +589,10 @@ export class KanbanPanel {
 							status:             'todo',
 							acceptanceCriteria: fields.acceptanceCriteria ?? [],
 							dependencies:       [],
-								labels:             fields.labels ?? [],
-							});
+							labels:             fields.labels ?? [],
+						}, existingIds);
+						newId = persisted.id;
+						items.push(persisted);
 						}, this.prdPathSetting());
 					if (!changed) { break; }
 					KanbanPanel.output?.appendLine(`[Board] Added issue ${newId}: ${fields.title}`);
@@ -654,13 +658,7 @@ export class KanbanPanel {
 					if (action === 'Append') {
 						let appended = 0;
 						PrdManager.mutateRaw(this.root, (_raw, existingItems) => {
-							const existingIds = new Set(existingItems.map((i: any) => String(i.id)));
-							const reIDed = imported.issues.map(i => {
-								if (!existingIds.has(i.id)) { existingIds.add(i.id); return i; }
-								const nid = generateNextId([...existingIds]);
-								existingIds.add(nid);
-								return { ...i, id: nid };
-							});
+							const reIDed = appendImportedIssues(existingItems, imported.issues);
 							existingItems.push(...reIDed);
 							appended = reIDed.length;
 						}, this.prdPathSetting());

@@ -7,6 +7,7 @@ All notable changes to Ralph Suite are documented here.
 ## [Unreleased]
 
 ### Added
+- IDs nuevos de backlog en formato `ISSUE-NNN` (mínimo 3 letras + número). Analyze, Init, import de plan, addIssue y Add from Chat ya no generan `1` ni `STEP-*`. IDs legacy se conservan.
 
 ### Changed
 

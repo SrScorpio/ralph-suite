@@ -7,16 +7,10 @@ describe('planImport', () => {
 			assert.strictEqual(generateNextId(['ISSUE-001', 'ISSUE-002', 'ISSUE-005']), 'ISSUE-006');
 		});
 
-		it('detects US-NNN format', () => {
-			assert.strictEqual(generateNextId(['US-010', 'US-003']), 'US-011');
-		});
-
-		it('detects STEP-NNN format', () => {
-			assert.strictEqual(generateNextId(['STEP-001', 'STEP-002']), 'STEP-003');
-		});
-
-		it('detects TASK-NNN format', () => {
-			assert.strictEqual(generateNextId(['TASK-001']), 'TASK-002');
+		it('always generates ISSUE-NNN even when existing IDs use other prefixes', () => {
+			assert.strictEqual(generateNextId(['US-010', 'US-003']), 'ISSUE-011');
+			assert.strictEqual(generateNextId(['STEP-001', 'STEP-002']), 'ISSUE-003');
+			assert.strictEqual(generateNextId(['TASK-001']), 'ISSUE-002');
 		});
 
 		it('falls back to ISSUE-001 when no existing IDs', () => {
@@ -52,10 +46,10 @@ TL;DR - A cool feature.
 			assert.strictEqual(result!.project, 'My Feature');
 			assert.strictEqual(result!.description, 'A cool feature.');
 			assert.strictEqual(result!.issues.length, 3);
-			assert.strictEqual(result!.issues[0].id, 'STEP-001');
+			assert.strictEqual(result!.issues[0].id, 'ISSUE-001');
 			assert.strictEqual(result!.issues[0].title, 'Setup base');
-			assert.strictEqual(result!.issues[1].id, 'STEP-002');
-			assert.strictEqual(result!.issues[1].dependencies[0], 'STEP-001', 'sequential deps');
+			assert.strictEqual(result!.issues[1].id, 'ISSUE-002');
+			assert.strictEqual(result!.issues[1].dependencies[0], 'ISSUE-001', 'sequential deps');
 			assert.strictEqual(result!.issues[2].title, 'Ship it');
 		});
 
@@ -106,9 +100,9 @@ Some description but no steps section.`;
 			const result = importPlanToPrd(md);
 			assert.ok(result);
 			assert.deepStrictEqual(result!.issues[0].dependencies, []);
-			assert.deepStrictEqual(result!.issues[1].dependencies, ['STEP-001']);
-			assert.deepStrictEqual(result!.issues[2].dependencies, ['STEP-002']);
-			assert.deepStrictEqual(result!.issues[3].dependencies, ['STEP-003']);
+			assert.deepStrictEqual(result!.issues[1].dependencies, ['ISSUE-001']);
+			assert.deepStrictEqual(result!.issues[2].dependencies, ['ISSUE-002']);
+			assert.deepStrictEqual(result!.issues[3].dependencies, ['ISSUE-003']);
 		});
 	});
 });
