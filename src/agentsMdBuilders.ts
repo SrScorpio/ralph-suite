@@ -270,10 +270,20 @@ Optional human plan; it does not replace prd.json.
     "acceptanceCriteria": ["..."],
     "dependencies": [],
     "labels": []
+  }, {
+    "id": "ISSUE-002",
+    "title": "...",
+    "description": "...",
+    "epic": "Setup",
+    "priority": "P1",
+    "status": "todo",
+    "acceptanceCriteria": ["..."],
+    "dependencies": ["ISSUE-001"],
+    "labels": []
   }]
 }
 \`\`\`
-Rules: preserve each local backlog ID exactly, use P0>P1>P2>P3, and set the initial status to "todo". Do not infer GitHub issue numbers or add commits unless explicitly authorized.
+Rules: new ids MUST be ISSUE-NNN (padding 3: ISSUE-001, ISSUE-002, …). Never use numeric-only ids (1, 001). Preserve each local backlog ID exactly, use P0>P1>P2>P3, and set the initial status to "todo". Do not infer GitHub issue numbers (ISSUE-001 is not GitHub #1) or add commits unless explicitly authorized.
 CREATE the file at: ${prdFile}
 Create parent directories if needed. Loop scratch belongs in .ralph/progress.md if you write any.
 
