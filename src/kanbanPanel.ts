@@ -438,8 +438,8 @@ export class KanbanPanel {
 				if (!id || !targetId) { break; }
 				try {
 					const changed = PrdManager.mutateRaw(this.folderFromMessage(msg)?.root ?? this.root, (_raw, items) => {
-						const fromIdx = items.findIndex((i: any) => i.id === id);
-						const toIdx   = items.findIndex((i: any) => i.id === targetId);
+						const fromIdx = items.findIndex((i: any) => String(i.id) === id);
+						const toIdx   = items.findIndex((i: any) => String(i.id) === targetId);
 						if (fromIdx === -1 || toIdx === -1) { return false; }
 						const [moved] = items.splice(fromIdx, 1);
 						const insertAt = before

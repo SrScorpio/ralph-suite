@@ -209,12 +209,20 @@ export function applyEditedBacklogId(original: string, proposed: unknown, existi
 	return original;
 }
 
-export function appendImportedIssues<T extends { id: unknown }>(existing: T[], imported: T[]): T[] {
+export function appendImportedIssues<T extends { id: unknown; dependencies?: unknown }>(existing: T[], imported: T[]): T[] {
 	const existingIds = new Set(existing.map(item => String(item.id)));
+	const idMap = new Map<string, string>();
 	return imported.map(item => {
 		const persisted = persistNewBacklogItem(item, [...existingIds]);
+		idMap.set(String(item.id), persisted.id);
 		existingIds.add(persisted.id);
-		return persisted;
+		if (!Array.isArray(persisted.dependencies)) {
+			return persisted;
+		}
+		return {
+			...persisted,
+			dependencies: persisted.dependencies.map((dep: unknown) => idMap.get(String(dep)) ?? dep),
+		};
 	});
 }
 

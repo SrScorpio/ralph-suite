@@ -73,6 +73,33 @@ describe('AC3 importPlanToPrd IDs', () => {
 		assert.ok(added.every(i => i.id.startsWith('ISSUE-')));
 		assert.ok(!added.some(i => i.id === '1' || i.id === 'ISSUE-002'));
 	});
+
+	it('al reasignar IDs remapea dependencies del lote oldId→newId, no al ISSUE-002 legacy', () => {
+		const imported = importPlanToPrd(PLAN_MD)!;
+		const existing = [{ id: '1', title: 'legacy' }, { id: 'ISSUE-002', title: 'kept' }];
+		const added = appendImportedIssues(existing, imported.issues);
+		assert.strictEqual(added.length, 3);
+		assert.deepStrictEqual(added[0].dependencies, []);
+		assert.deepStrictEqual(added[1].dependencies, [added[0].id]);
+		assert.deepStrictEqual(added[2].dependencies, [added[1].id]);
+		assert.ok(!added[2].dependencies.includes('ISSUE-002'), 'must not keep the legacy ISSUE-002');
+		assert.deepStrictEqual(existing.map(i => i.id), ['1', 'ISSUE-002']);
+	});
+});
+
+describe('reorderCard numeric legacy ids', () => {
+	it('compara ids con String(i.id) como editIssue', () => {
+		const source = fs.readFileSync(path.join(__dirname, '..', 'kanbanPanel.ts'), 'utf8');
+		const start = source.indexOf("case 'reorderCard'");
+		const end = source.indexOf("case 'addNote'");
+		assert.ok(start >= 0 && end > start, 'reorderCard case must exist');
+		const reorder = source.slice(start, end);
+		assert.ok(reorder.includes('String(i.id) === id'), 'fromIdx must coerce numeric legacy ids');
+		assert.ok(reorder.includes('String(i.id) === targetId'), 'toIdx must coerce numeric legacy ids');
+		assert.ok(!/findIndex\(\(i: any\) => i\.id === id\)/.test(reorder));
+		assert.ok(!/findIndex\(\(i: any\) => i\.id === targetId\)/.test(reorder));
+		assert.ok(source.includes("items.findIndex((i: any) => String(i.id) === id)"));
+	});
 });
 
 describe('AC4 generateNextId / addIssue', () => {
