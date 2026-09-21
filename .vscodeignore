@@ -13,4 +13,12 @@ package-lock.json
 AGENTS.md
 **/.DS_Store
 **/*.map
+*.vsix
 prd.json
+dist/**/*.map
+.vscode-test/**
+out/**
+_p13.py
+_patch_*.py
+_t.py
+_watch.js
