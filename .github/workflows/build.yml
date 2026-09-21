@@ -17,6 +17,14 @@ jobs:
       - run: npm install
       - run: npm run compile
       - run: npm test
+      - name: Fail if gitignored files are tracked
+        run: |
+          leaked="$(git ls-files -c -i --exclude-standard)"
+          if [ -n "$leaked" ]; then
+            echo "Tracked files match .gitignore:"
+            echo "$leaked"
+            exit 1
+          fi
       - run: npx vsce package --no-dependencies --allow-missing-repository
       - uses: actions/upload-artifact@v4
         with:
