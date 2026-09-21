@@ -10,6 +10,7 @@ All notable changes to Ralph Suite are documented here.
 - IDs nuevos de backlog en formato `ISSUE-NNN` (mínimo 3 letras + número). Analyze, Init, import de plan, addIssue y Add from Chat ya no generan `1` ni `STEP-*`. IDs legacy se conservan.
 
 ### Changed
+- Defaults de `modelProfiles`: `engine` copilot, `model` vacío y `mode` execute (review para review); se elimina `security-audit`. Si tenías `gpt-5`/`security-audit` en settings.json, VS Code conserva el override: pon `model: ""` y `mode: execute|review`.
 
 ### Fixed
 

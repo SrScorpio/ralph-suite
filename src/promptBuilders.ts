@@ -49,7 +49,10 @@ function isValidRalphExecutionContext(task: any, context: unknown): context is R
 
 // ── Profile resolution ───────────────────────────────────────────────────────
 
-function inferTaskType(task: any): string {
+const ALLOWED_ENGINES = new Set(['copilot', 'codex', 'claude', 'opencode']);
+const ALLOWED_MODES = new Set(['execute', 'review']);
+
+export function inferTaskType(task: any): string {
 	const text = [
 		task.title ?? '',
 		task.description ?? '',
@@ -65,14 +68,30 @@ function inferTaskType(task: any): string {
 	return 'default';
 }
 
-function resolveAgentProfile(task: any, cfg: vscode.WorkspaceConfiguration): AgentProfile {
+function sanitizeModel(raw: unknown): string {
+	if (typeof raw !== 'string') { return ''; }
+	return raw.replace(/[\u0000-\u001F\u007F]/g, '').trim();
+}
+
+function allowlistedEngine(raw: unknown, fallback: unknown): string {
+	if (typeof raw === 'string' && ALLOWED_ENGINES.has(raw.trim())) { return raw.trim(); }
+	if (typeof fallback === 'string' && ALLOWED_ENGINES.has(fallback.trim())) { return fallback.trim(); }
+	return 'copilot';
+}
+
+function allowlistedMode(raw: unknown, taskType: string): string {
+	if (typeof raw === 'string' && ALLOWED_MODES.has(raw)) { return raw; }
+	return taskType === 'review' ? 'review' : 'execute';
+}
+
+export function resolveAgentProfile(task: any, cfg: vscode.WorkspaceConfiguration): AgentProfile {
 	const taskType = inferTaskType(task);
-	const profiles = cfg.get<Record<string, Partial<AgentProfile>>>('modelProfiles', {});
+	const profiles = cfg.get<Record<string, Partial<AgentProfile>>>('modelProfiles', {}) ?? {};
 	const selected = profiles[taskType] ?? profiles.default ?? {};
 	return {
-		engine: selected.engine ?? cfg.get<string>('engine', 'copilot'),
-		model: selected.model ?? '',
-		mode: selected.mode ?? 'execute',
+		engine: allowlistedEngine(selected.engine, cfg.get<string>('engine', 'copilot')),
+		model: sanitizeModel(selected.model),
+		mode: allowlistedMode(selected.mode, taskType),
 		taskType,
 	};
 }

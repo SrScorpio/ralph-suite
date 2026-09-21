@@ -146,22 +146,104 @@
               "mode": "execute"
             },
             "bugfix": {
-              "engine": "codex",
-              "model": "gpt-5-codex",
+              "engine": "copilot",
+              "model": "",
               "mode": "execute"
             },
             "review": {
-              "engine": "codex",
-              "model": "gpt-5",
+              "engine": "copilot",
+              "model": "",
               "mode": "review"
             },
             "security": {
-              "engine": "codex",
-              "model": "gpt-5",
-              "mode": "security-audit"
+              "engine": "copilot",
+              "model": "",
+              "mode": "execute"
             }
           },
-          "description": "Agent/model recommendations by task type. Ralph cannot force every chat provider to use a model; this is injected as an explicit recommendation."
+          "properties": {
+            "default": {
+              "type": "object",
+              "properties": {
+                "engine": {
+                  "type": "string",
+                  "enum": ["copilot", "codex", "claude", "opencode"]
+                },
+                "model": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": ["execute", "review"]
+                }
+              }
+            },
+            "bugfix": {
+              "type": "object",
+              "properties": {
+                "engine": {
+                  "type": "string",
+                  "enum": ["copilot", "codex", "claude", "opencode"]
+                },
+                "model": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": ["execute", "review"]
+                }
+              }
+            },
+            "review": {
+              "type": "object",
+              "properties": {
+                "engine": {
+                  "type": "string",
+                  "enum": ["copilot", "codex", "claude", "opencode"]
+                },
+                "model": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": ["execute", "review"]
+                }
+              }
+            },
+            "security": {
+              "type": "object",
+              "properties": {
+                "engine": {
+                  "type": "string",
+                  "enum": ["copilot", "codex", "claude", "opencode"]
+                },
+                "model": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": ["execute", "review"]
+                }
+              }
+            }
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "engine": {
+                "type": "string",
+                "enum": ["copilot", "codex", "claude", "opencode"]
+              },
+              "model": {
+                "type": "string"
+              },
+              "mode": {
+                "type": "string",
+                "enum": ["execute", "review"]
+              }
+            }
+          },
+          "markdownDescription": "%config.modelProfiles.description%"
         },
         "ralph-suite.maxLoops": {
           "type": "number",

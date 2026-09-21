@@ -1,7 +1,8 @@
 {
   "extension.displayName": "Ralph Suite",
   "extension.description": "Autonomous AI task runner with Kanban board, project memory and multi-engine support.",
-  "config.engine.description": "AI engine to use for task execution (copilot, codex, claude, opencode).",
+  "config.engine.description": "Recommended chat engine injected into the task prompt (copilot, codex, claude, opencode). This does not switch the Chat provider.",
+  "config.modelProfiles.description": "Recommended engine, model and mode by inferred task type (default, bugfix, review, security). Injected as a prompt recommendation; Ralph does not force the Chat provider or model. Use Ralph vocabulary only (`copilot`/`codex`/`claude`/`opencode`, `execute`/`review`). Do not use luna/terra/sol. Empty model means the provider default. Unknown modes such as `security-audit` become `execute` (or `review` when the task type is review).",
   "config.maxLoops.description": "Maximum number of tasks to execute per auto-run session before pausing.",
   "config.freshContext.description": "Open a new chat window for each task (fresh context, no history bleeding between tasks). Recommended: true.",
   "config.prdPath.description": "Path to prd.json relative to the workspace root. Default: docs/ralph/prd.json. If that file is missing and a root prd.json exists, Ralph uses the legacy root file. Custom paths are honoured and cannot escape the workspace.",
