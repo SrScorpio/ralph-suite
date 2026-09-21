@@ -217,8 +217,8 @@ Configure in `Ctrl+,` → Ralph Suite:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `engine` | `copilot` | AI engine: `copilot`, `codex`, `claude`, `opencode` |
-| `modelProfiles` | (object) | Agent/model recommendations by task type (default, bugfix, review, security) |
+| `engine` | `copilot` | Recommended chat engine injected into the prompt (`copilot`, `codex`, `claude`, `opencode`). Does not switch the Chat provider. |
+| `modelProfiles` | (object) | Recommended `engine`/`model`/`mode` by task type (`default`, `bugfix`, `review`, `security`). Empty `model` = provider default. Modes: `execute` \| `review`. Recommendation only; not a Chat router. |
 | `agentRole` | `Senior Software Engineer` | Role injected into AGENTS.md |
 | `agentStack` | `` | Tech stack for AGENTS.md |
 | `agentProject` | `` | Project description for AGENTS.md |

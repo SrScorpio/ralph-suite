@@ -1,7 +1,8 @@
 {
   "extension.displayName": "Ralph Suite",
   "extension.description": "Ejecutor aut\u00f3nomo de tareas con IA, tablero Kanban, memoria de proyecto y soporte multi-motor.",
-  "config.engine.description": "Motor de IA para ejecutar las tareas (copilot, codex, claude, opencode).",
+  "config.engine.description": "Recomendación de motor inyectada en el prompt (copilot, codex, claude, opencode). No cambia el proveedor de Chat.",
+  "config.modelProfiles.description": "Recomendación de motor, modelo y modo por tipo de tarea (default, bugfix, review, security). Se inyecta en el prompt; Ralph no fuerza el proveedor ni el modelo. Vocabulario Ralph (`copilot`/`codex`/`claude`/`opencode`, `execute`/`review`). No uses luna/terra/sol. Modelo vacío = default del proveedor. Modos desconocidos como `security-audit` pasan a `execute` (o `review` si el tipo es review).",
   "config.maxLoops.description": "N\u00famero m\u00e1ximo de tareas a ejecutar por sesi\u00f3n de auto-ejecuci\u00f3n antes de pausar.",
   "config.freshContext.description": "Abrir una nueva ventana de chat para cada tarea (contexto limpio, sin historial previo entre tareas). Recomendado: activado.",
   "config.prdPath.description": "Ruta al archivo prd.json relativa a la ra\u00edz del workspace. Por defecto: docs/ralph/prd.json. Si no existe y hay un prd.json en la ra\u00edz, Ralph usa el archivo legado. Las rutas personalizadas se respetan y no pueden salir del workspace.",

@@ -120,3 +120,9 @@ Fecha: 5 de junio de 2026
 - Decisión: cerrar el alcance actual con `ralph-suite.syncIssue` y no lanzar N llamadas concurrentes a `ralph-suite.runTask`. Si se retoma el paralelismo, debe ser un scheduler acotado propiedad de Ralph, con contexto, abort y lease por tarea.
 - Consecuencias: se evita introducir carreras y se conserva el runner serial actual. #3 queda parcialmente resuelto hasta que exista un contrato de scheduler con aislamiento, límites de concurrencia, recuperación y validación de seguridad.
 - Detalle: `docs/adr/ADR-016-dispatch-paralelo-propiedad-del-runner.md`.
+
+## ADR-017 — Simplificar `modelProfiles`
+- Estado: accepted
+- Contexto: defaults obsoletos (`gpt-5`, `gpt-5-codex`, `security-audit`) y mezcla verbal con la paleta Alfred (`luna`/`terra`/`sol`). Ralph no fuerza modelo; solo recomienda en el prompt.
+- Decisión: Opción A — Ralph recomienda `engine`/`model`/`mode` con vocabulario propio y defaults actuales (`model: ""`, modos `execute|review`). Alfred no se duplica. Híbrido descartado como over-engineering.
+- Consecuencias: settings y prompt honestos; Kanban sin selector nuevo; no hay router de Chat. Detalle: `docs/adr/ADR-017-simplificar-model-profiles.md`.
