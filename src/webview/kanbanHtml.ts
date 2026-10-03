@@ -13,6 +13,8 @@ export interface BoardConfig {
 	locale?: Locale;
 	boardScope?: 'folder' | 'workspace';
 	showScopeSwitch?: boolean;
+	/** Modo Alfred efectivo: el panel no pinta rules ni boundaries (ADR-018 §4). */
+	alfredMode?: boolean;
 }
 
 // ── Shell HTML — loaded ONCE, never replaced ──────────────────────────────────
@@ -408,7 +410,25 @@ export function getBoardContent(
 	const bar = statsBar(prd, cfg);
 	if (cfg.view === 'history') { return bar + historyView(logs, locale); }
 	if (cfg.view === 'epic')    { return bar + epicView(prd, logs, statuses, locale); }
-	return bar + boardView(prd, logs, cfg.autoRun, locale) + guardrailsPanel(cfg.guardrails, cfg.boundaries) + (memories ? memoriesPanel(memories) : '');
+	return bar + boardView(prd, logs, cfg.autoRun, locale)
+		+ (cfg.alfredMode ? alfredModePanel(locale) : guardrailsPanel(cfg.guardrails, cfg.boundaries))
+		+ (memories ? memoriesPanel(memories) : '');
+}
+
+/** Aviso de modo Alfred: no se muestran rules ni boundaries de Ralph. */
+function alfredModePanel(locale: Locale): string {
+	const es = locale === 'es';
+	return `<details class="guardrails-panel">
+  <summary>🤝 ${es ? 'Modo Alfred' : 'Alfred mode'}</summary>
+  <div class="guardrails-body">
+    <div class="guardrails-item">${es
+		? 'Gobernado por Alfred Dev. En este modo no se aplican engine, modelProfiles, agentRole, agentStack, agentProject, agentCheckpoints, guardrails ni boundaries de Ralph.'
+		: 'Governed by Alfred Dev. In this mode Ralph\u2019s engine, modelProfiles, agentRole, agentStack, agentProject, agentCheckpoints, guardrails and boundaries do not apply.'}</div>
+    <div class="guardrails-item">${es
+		? 'Los ajustes siguen en package.json pero Ralph no los usa aquí.'
+		: 'The settings remain in package.json but Ralph does not use them here.'}</div>
+  </div>
+</details>`;
 }
 
 

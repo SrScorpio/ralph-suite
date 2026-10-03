@@ -154,6 +154,12 @@
           "default": "copilot",
           "description": "%config.engine.description%"
         },
+        "ralph-suite.alfredMode": {
+          "type": "string",
+          "enum": ["auto", "off"],
+          "default": "auto",
+          "description": "%config.alfredMode.description%"
+        },
         "ralph-suite.modelProfiles": {
           "type": "object",
           "default": {

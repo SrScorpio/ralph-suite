@@ -9,7 +9,7 @@ export function buildAnalyzeExistingProjectPrompt(roots: string[]): string {
     list,
     '',
     '## Sources to inspect (only if they exist)',
-    '- README.md, CHANGELOG.md, AGENTS.md, docs/, plans/',
+    '- README.md, CHANGELOG.md, AGENTS.md, docs/',
     '- GitHub issues/PRs when a git remote exists',
     '- Local runtime `.ralph/task-*-status` and logs',
     '- Existing conversations or notes only if a tool can actually read them; never invent chat history',

@@ -12,7 +12,7 @@ import { showMenu } from './commands/menu';
 import { initProject, setupProject } from './commands/project';
 import { getTaskRunBlockReason, pendingTasksMessage, runTaskWithRetry } from './commands/task';
 import { optimizeMemory } from './commands/memory';
-import { buildPrompt } from './promptBuilders';
+import { selectTaskPrompt } from './promptBuilders';
 import { resolveWorkspaceRoot } from './workspaceRoot';
 import { requireWorkspaceTrust } from './workspaceTrust';
 import { listRalphFolders } from './workspaceFolders';
@@ -20,6 +20,8 @@ import { buildAnalyzeExistingProjectPrompt } from './kanban/analyzeProject';
 import { sendToChat } from './chatLauncher';
 import { syncIssue } from './commands/syncIssue';
 import { RalphSidebarProvider } from './sidebarTree';
+import { resolveAlfredMode, AlfredIdentity } from './alfredIdentity';
+import { buildAlfredAnalyzePrompt, buildAlfredSyncLedger } from './alfredPrompt';
 
 export function _doActivate(context: vscode.ExtensionContext, output: vscode.OutputChannel) {
 	// Status bar — se conserva: el botón inferior sigue abriendo el menú.
@@ -66,10 +68,11 @@ export function _doActivate(context: vscode.ExtensionContext, output: vscode.Out
 			}
 		}),
 
-		vscode.commands.registerCommand('ralph-suite.setupProject', () => {
+		vscode.commands.registerCommand('ralph-suite.setupProject', async () => {
 			if (!requireWorkspaceTrust('configurar el proyecto')) { return; }
 			output.appendLine('[Ralph] setupProject triggered');
-			setupProject(output);
+			const identity = await currentAlfredIdentity(output);
+			await setupProject(output, identity);
 		}),
 
 		vscode.commands.registerCommand('ralph-suite.analyzeProject', async () => {
@@ -77,16 +80,20 @@ export function _doActivate(context: vscode.ExtensionContext, output: vscode.Out
 			output.appendLine('[Ralph] analyzeProject triggered');
 			const folders = listRalphFolders(vscode.workspace.workspaceFolders?.map(folder => folder.uri.fsPath), getPrdPathSetting());
 			if (!folders.length) { vscode.window.showErrorMessage('No workspace open.'); return; }
-			const prompt = buildAnalyzeExistingProjectPrompt(folders.map(folder => folder.root));
+			const identity = await currentAlfredIdentity(output);
+			const prompt = identity
+				? buildAlfredAnalyzePrompt(identity, folders.map(folder => folder.root))
+				: buildAnalyzeExistingProjectPrompt(folders.map(folder => folder.root));
 			await sendToChat(prompt, { fallbackMessage: 'Analyze prompt copied — paste in Chat.' });
 		}),
 
-		vscode.commands.registerCommand('ralph-suite.initProject', () => {
+		vscode.commands.registerCommand('ralph-suite.initProject', async () => {
 			if (!requireWorkspaceTrust('inicializar el proyecto')) { return; }
 			output.appendLine('[Ralph] initProject triggered');
 			const root = getWorkspaceRoot();
 			if (!root) { vscode.window.showErrorMessage('No workspace open.'); return; }
-			initProject(root, output);
+			const identity = await currentAlfredIdentity(output);
+			await initProject(root, output, identity);
 		}),
 
 		vscode.commands.registerCommand('ralph-suite.optimizeMemory', async () => {
@@ -96,7 +103,8 @@ export function _doActivate(context: vscode.ExtensionContext, output: vscode.Out
 			if (!root) { vscode.window.showErrorMessage('No workspace open.'); return; }
 			const cfg       = vscode.workspace.getConfiguration('ralph-suite');
 			const review = cfg.get<boolean>('memoryOptimizeReview', true);
-			await optimizeMemory(root, output, review);
+			const identity = await currentAlfredIdentity(output);
+			await optimizeMemory(root, output, review, identity);
 		}),
 
 		vscode.commands.registerCommand('ralph-suite.openSettings', () => {
@@ -125,11 +133,13 @@ export function _doActivate(context: vscode.ExtensionContext, output: vscode.Out
 				if (reason) { vscode.window.showErrorMessage(`Ralph: ${reason}`); return; }
 			}
 			const cfg          = vscode.workspace.getConfiguration('ralph-suite');
-			const prompt       = buildPrompt(task, prd, {
-				kind: 'ralph-execution',
+			const identity     = await currentAlfredIdentity(output);
+			const ralphContext = {
+				kind: 'ralph-execution' as const,
 				localTaskId: task.id,
 				workspaceRoot: root,
-			});
+			};
+			const prompt       = selectTaskPrompt(task, prd, ralphContext, identity);
 			const freshContext = cfg.get<boolean>('freshContext', true);
 			const minWaitMs    = cfg.get<number>('minWaitMs', 15000);
 			const timeoutMs    = cfg.get<number>('taskTimeoutMs', 600000);
@@ -142,6 +152,7 @@ export function _doActivate(context: vscode.ExtensionContext, output: vscode.Out
 			const execute = (resolvedIssueNumber: unknown, resolvedStatus: unknown) => {
 				const allowed = listRalphFolders(vscode.workspace.workspaceFolders?.map(folder => folder.uri.fsPath), getPrdPathSetting()).map(folder => folder.root);
 				const root = resolveCommandWorkspaceRoot(workspaceRoot, allowed);
+				logAlfredSync(output, resolvedIssueNumber, resolvedStatus);
 				syncIssue(resolvedIssueNumber, resolvedStatus, root, getPrdPathSetting());
 			};
 			if (githubIssueNumber !== undefined && status !== undefined) {
@@ -210,6 +221,30 @@ export function _doActivate(context: vscode.ExtensionContext, output: vscode.Out
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Resuelve la identidad de Alfred para la acción en curso. Devuelve `null`
+ * cuando el modo NO es efectivo (ruta de hoy) o `off`, sin caché por acción.
+ */
+async function currentAlfredIdentity(output: vscode.OutputChannel): Promise<AlfredIdentity | null> {
+	const mode = await resolveAlfredMode(output);
+	return mode.effective ? mode.identity : null;
+}
+
+/**
+ * Registro del syncIssue en modo Alfred. Como no lanza chat, no inventamos un
+ * prompt: solo declaramos proveedor, modelo y agente en el OutputChannel.
+ * Best-effort y sin bloquear el camino síncrono.
+ */
+function logAlfredSync(output: vscode.OutputChannel, issueNumber: unknown, status: unknown): void {
+	try {
+		void resolveAlfredMode().then(mode => {
+			if (!mode.effective) { return; }
+			const ledger = buildAlfredSyncLedger(mode.identity, `github:#${String(issueNumber)} → ${String(status)}`);
+			output.appendLine(ledger.lines[0]);
+		});
+	} catch { /* best-effort: nunca rompe el sync */ }
+}
 
 function getWorkspaceRoot(): string | undefined {
 	return resolveWorkspaceRoot(

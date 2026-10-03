@@ -14,10 +14,11 @@ import { buildInitPrompt } from '../promptBuilders';
 import { buildGeneratedProjectFiles } from '../agentsMdBuilders';
 import { sendToChat } from '../chatLauncher';
 import { resolveWorkspaceRoot } from '../workspaceRoot';
+import { AlfredIdentity } from '../alfredIdentity';
 
 // ── Init project ─────────────────────────────────────────────────────────────
 
-export async function initProject(root: string, output: vscode.OutputChannel): Promise<void> {
+export async function initProject(root: string, output: vscode.OutputChannel, alfredIdentity?: AlfredIdentity | null): Promise<void> {
 	const prdPath  = PrdManager.prdPath(root, getPrdPathSetting());
 	const displayPath = prdDisplayPath(root, prdPath);
 	const ralphDir = path.join(root, '.ralph');
@@ -58,7 +59,7 @@ export async function initProject(root: string, output: vscode.OutputChannel): P
 	const memCfg = vscode.workspace.getConfiguration('ralph-suite').get<string>('memoriesPath', '.agent/memories.md');
 	RalphStateManager.initMemories(root, goal, memCfg);
 
-	const prompt = buildInitPrompt(goal, root);
+	const prompt = buildInitPrompt(goal, root, alfredIdentity);
 	output.appendLine(`[Ralph] Init prompt: ${prompt.length} chars`);
 
 	const sent = await sendToChat(prompt);
@@ -91,7 +92,22 @@ export async function initProject(root: string, output: vscode.OutputChannel): P
 
 // ── Setup project ────────────────────────────────────────────────────────────
 
-export async function setupProject(output: vscode.OutputChannel): Promise<void> {
+export async function setupProject(output: vscode.OutputChannel, alfredIdentity?: AlfredIdentity | null): Promise<void> {
+	// Modo Alfred: `AGENTS.md` lo posee Alfred. No se escribe NINGÚN fichero del
+	// paquete (no un bloqueo parcial: un layout a medias es incoherente).
+	if (alfredIdentity) {
+		const owner = alfredIdentity.agentsMdOwner;
+		output.appendLine(`[Setup] modo Alfred — no se genera ningún fichero; AGENTS.md lo posee ${owner}`);
+		const action = await vscode.window.showInformationMessage(
+			`En modo Alfred, AGENTS.md lo posee ${owner}. Ralph no genera el paquete del proyecto.`,
+			'Abrir paleta de Alfred Dev',
+		);
+		if (action === 'Abrir paleta de Alfred Dev') {
+			void vscode.commands.executeCommand('workbench.action.quickOpen', '>Alfred');
+		}
+		return;
+	}
+
 	const root = getWorkspaceRoot();
 	if (!root) { vscode.window.showErrorMessage('No workspace open.'); return; }
 

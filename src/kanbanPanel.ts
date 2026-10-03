@@ -15,6 +15,7 @@ import { detectLocale } from './i18n';
 import { requireWorkspaceTrust } from './workspaceTrust';
 import { BoardScope, defaultBoardScope, listRalphFolders, resolveFolderIndex } from './workspaceFolders';
 import { buildAnalyzeExistingProjectPrompt } from './kanban/analyzeProject';
+import { resolveAlfredMode } from './alfredIdentity';
 
 export function shouldCompleteTask(summary: string | undefined): boolean {
 	return summary !== undefined;
@@ -38,6 +39,7 @@ export class KanbanPanel {
 	private runnerAbortController: AbortController | null = null;
 	private currentView: 'board' | 'epic' | 'history' = 'board';
 	private boardScope: BoardScope = 'folder';
+	private alfredEffective = false;
 	private folders = listRalphFolders(vscode.workspace.workspaceFolders?.map(folder => folder.uri.fsPath), this.prdPathSetting());
 
 
@@ -143,6 +145,16 @@ export class KanbanPanel {
 	private shellLoaded = false;
 
 	private render() {
+		// El modo Alfred se resuelve en cada render, sin caché. Mientras llega la
+		// identidad (≤1000 ms) el tablero no se pinta a medias.
+		void resolveAlfredMode(KanbanPanel.output).then(mode => {
+			this.renderWithAlfred(true, mode.effective ? mode.identity.actions : null);
+		}).catch(() => {
+			this.renderWithAlfred(true, null);
+		});
+	}
+
+	private renderWithAlfred(alfredEffective: boolean, actions: any) {
 		if (this.disposed) { return; }
 		try {
 			const prd      = this.aggregatedPrd();
@@ -153,6 +165,7 @@ export class KanbanPanel {
 			KanbanPanel.output?.appendLine(`[Ralph] Board loaded ${prd?.issues.length ?? 0} issues from ${loadedPaths || 'none'}`);
 			const memories = this.loadFile(RalphStateManager.memoriesPath(this.root, this.memoriesPathSetting()));
 			const logs     = this.loadLogs();
+			this.alfredEffective = alfredEffective;
 			const cfg      = this.getBoardConfig();
 			this.panel.title = prd ? `${prd.project} — Board` : 'Ralph Board';
 
@@ -203,13 +216,15 @@ export class KanbanPanel {
 			autoRun:    this.autoRun,
 			runnerNotice: this.runnerNotice,
 			maxLoops:   s.get<number>('maxLoops', 5),
-			guardrails: s.get<string[]>('guardrails', []),
-			boundaries: s.get<string[]>('boundaries', []),
+			// En modo Alfred el tablero no pinta rules ni boundaries (ADR-018 §4).
+			guardrails: this.alfredEffective ? [] : s.get<string[]>('guardrails', []),
+			boundaries: this.alfredEffective ? [] : s.get<string[]>('boundaries', []),
 			view:       this.currentView,
 			health,
 			locale:     detectLocale(),
 			boardScope: this.boardScope,
 			showScopeSwitch: this.folders.length > 1,
+			alfredMode: this.alfredEffective,
 		};
 	}
 

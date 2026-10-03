@@ -10,6 +10,8 @@ import * as fs from 'fs';
 import { loadAndInjectContext } from './contextInjector';
 import { RalphStateManager, safeTaskId } from './stateManager';
 import { buildInitPromptText } from './agentsMdBuilders';
+import { AlfredIdentity } from './alfredIdentity';
+import { buildAlfredPrompt, buildAlfredInitPrompt } from './alfredPrompt';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -106,6 +108,57 @@ function loadMemory(root: string, configuredPath: string = '.agent/memories.md')
 
 // ── Task prompt ──────────────────────────────────────────────────────────────
 
+/**
+ * Señales de completado: protocolo de Ralph (no identidad), por eso se
+ * CONSERVAN en modo Alfred (ADR-018 §4).
+ */
+function completionSignalsBlock(ralphContext: RalphExecutionContext | null, taskId: string): string[] {
+	if (!ralphContext) { return []; }
+	const ralphDir = path.join(ralphContext.workspaceRoot, '.ralph').replace(/\\/g, '/');
+	const safeId = safeTaskId(taskId);
+	return [
+		'━━━ COMPLETION SIGNALS (Ralph execution only; both required after gates) ━━━',
+		`Use the local backlog ID exactly as provided: ${taskId}; never infer or renumber it.`,
+		`1. Write (overwrite) the single word \`completed\` to: ${ralphDir}/task-${safeId}-status`,
+		`2. Write \`NOTA: <one line summary>\` to: ${ralphDir}/task-${safeId}-note`,
+	];
+}
+
+/**
+ * Prompt en modo Alfred: identidad autoritativa, sin la voz de Ralph y con los
+ * datos de la tarea delimitados. La memoria y las señales de completado se
+ * conservan (runtime de Ralph, ADR-018 §4).
+ */
+export function buildPromptInAlfredMode(identity: AlfredIdentity, task: any, context: unknown): string {
+	const ralphContext = isValidRalphExecutionContext(task, context) ? context : null;
+	const workspaceRoot = ralphContext?.workspaceRoot;
+	const memPath = vscode.workspace.getConfiguration('ralph-suite').get<string>('memoriesPath', '.agent/memories.md');
+	const memory = workspaceRoot
+		? (loadAndInjectContext(workspaceRoot, task.description || '', task.dependencies || [], task.labels || [], task.epic, memPath)?.injected
+			?? loadMemory(workspaceRoot, memPath))
+		: null;
+	const base = buildAlfredPrompt(identity, {
+		id: task.id,
+		title: task.title,
+		description: task.description,
+		epic: task.epic,
+		priority: task.priority,
+		acceptanceCriteria: task.acceptanceCriteria || [],
+		labels: task.labels || [],
+		dependencies: task.dependencies || [],
+		memory,
+	});
+	return [base, '', ...completionSignalsBlock(ralphContext, task.id)].filter(Boolean).join('\n');
+}
+
+/**
+ * Selector único de prompt de tarea: con identidad → modo Alfred; sin identidad
+ * → ruta de hoy (idéntica byte a byte).
+ */
+export function selectTaskPrompt(task: any, prd: any, context: unknown, identity?: AlfredIdentity | null): string {
+	return identity ? buildPromptInAlfredMode(identity, task, context) : buildPrompt(task, prd, context);
+}
+
 export function buildPrompt(task: any, prd: any, context: unknown): string {
 	const ralphContext = isValidRalphExecutionContext(task, context) ? context : null;
 	const workspaceRoot = ralphContext?.workspaceRoot;
@@ -178,7 +231,14 @@ export function buildPrompt(task: any, prd: any, context: unknown): string {
 
 // ── Init prompt ──────────────────────────────────────────────────────────────
 
-export function buildInitPrompt(goal: string, workspaceRoot: string): string {
+export function buildInitPrompt(goal: string, workspaceRoot: string, alfredIdentity?: AlfredIdentity | null): string {
+	if (alfredIdentity) {
+		return buildAlfredInitPrompt(alfredIdentity, {
+			goal,
+			workspaceRoot,
+			agentsMdOwner: alfredIdentity.agentsMdOwner,
+		});
+	}
 	const cfg         = vscode.workspace.getConfiguration('ralph-suite');
 	const guardrails  = cfg.get<string[]>('guardrails', []) ?? [];
 	const checkpoints = cfg.get<string[]>('agentCheckpoints', []) ?? [];

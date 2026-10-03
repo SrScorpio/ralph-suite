@@ -67,12 +67,18 @@ const workspaceApi = {
 	}),
 	getConfiguration: () => configuration,
 	openTextDocument: async () => ({}),
+	isTrusted: true,
 	workspaceFolders: [],
+};
+
+const extensionsApi = {
+	getExtension: () => undefined,
 };
 
 const vscodeMock = {
 	commands: commandsApi,
 	env: envApi,
+	extensions: extensionsApi,
 	RelativePattern: class RelativePattern {
 		constructor(public base: string, public pattern: string) {}
 	},
