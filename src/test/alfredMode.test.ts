@@ -18,6 +18,7 @@ import { setupProject } from '../commands/project';
 import { buildPrompt, buildPromptInAlfredMode, selectTaskPrompt } from '../promptBuilders';
 import { buildAnalyzeExistingProjectPrompt } from '../kanban/analyzeProject';
 import { getBoardContent } from '../webview/kanbanHtml';
+import { KanbanPanel } from '../kanbanPanel';
 
 const SRC_ROOT = path.join(__dirname, '..');
 
@@ -552,6 +553,95 @@ describe('ADR-018 integración prompt de tarea y tablero', () => {
 	const boardPrd = { project: 'demo', branchName: 'main', description: '', issues: [
 		{ id: 'ISSUE-001', title: 'Una', description: '', status: 'todo', priority: 'P2' },
 	] };
+
+	async function renderBoard(values: Record<string, unknown> = {}): Promise<string> {
+		const original = vscode.workspace.getConfiguration;
+		(vscode.workspace as unknown as { getConfiguration: typeof original }).getConfiguration = () => config({
+			guardrails: ['Never modify prd.json'], boundaries: ['legacy/**'], ...values,
+		});
+		try {
+			return await new Promise<string>(resolve => {
+				// Keep the real render/config/update path; isolate only workspace I/O and the webview transport.
+				const panel: { render(): void } = Object.create(KanbanPanel.prototype);
+				Object.assign(panel, {
+					disposed: false, shellLoaded: true, root: os.tmpdir(),
+					autoRun: false, currentView: 'board', boardScope: 'folder', folders: [],
+					aggregatedPrd: () => boardPrd, scopedFolders: () => [],
+					loadFile: () => null, loadLogs: () => ({}), mergedStatuses: () => ({}),
+					panel: { webview: { postMessage: async (message: { data: { html: string } }) => {
+						resolve(message.data.html);
+						return true;
+					} } },
+				});
+				panel.render();
+			});
+		} finally {
+			(vscode.workspace as unknown as { getConfiguration: typeof original }).getConfiguration = original;
+		}
+	}
+
+	it('el render real activa Alfred solo con auto e identidad válida', async () => {
+		const restoreExt = withExtension(true);
+		const exec = withExecuteCommand(() => validDto());
+		try {
+			const html = await renderBoard({ alfredMode: 'auto' });
+			assert.ok(html.includes('Alfred mode'));
+			assert.ok(!html.includes('<div class="guardrail-item">'));
+			assert.ok(!html.includes('Never modify prd.json') && !html.includes('legacy/**'));
+		} finally {
+			exec.restore();
+			restoreExt();
+		}
+	});
+
+	it('el render real con off restaura rules y boundaries aunque Alfred esté instalado', async () => {
+		const restoreExt = withExtension(true);
+		try {
+			const html = await renderBoard({ alfredMode: 'off' });
+			assert.ok(!html.includes('Alfred mode'));
+			assert.ok(html.includes('Never modify prd.json') && html.includes('legacy/**'));
+		} finally {
+			restoreExt();
+		}
+	});
+
+	it('el render real sin Alfred conserva rules y boundaries', async () => {
+		const restoreExt = withExtension(false);
+		try {
+			const html = await renderBoard({ alfredMode: 'auto' });
+			assert.ok(!html.includes('Alfred mode'));
+			assert.ok(html.includes('Never modify prd.json') && html.includes('legacy/**'));
+		} finally {
+			restoreExt();
+		}
+	});
+
+	it('el render real con identidad inválida conserva rules y boundaries', async () => {
+		const restoreExt = withExtension(true);
+		const exec = withExecuteCommand(() => ({ contractVersion: 2 }));
+		try {
+			const html = await renderBoard({ alfredMode: 'auto' });
+			assert.ok(!html.includes('Alfred mode'));
+			assert.ok(html.includes('Never modify prd.json') && html.includes('legacy/**'));
+		} finally {
+			exec.restore();
+			restoreExt();
+		}
+	});
+
+	it('el render real restaura rules y boundaries si falla la detección inesperadamente', async () => {
+		const original = vscode.extensions.getExtension;
+		(vscode.extensions as unknown as { getExtension: typeof original }).getExtension = () => {
+			throw new Error('Extension registry unavailable');
+		};
+		try {
+			const html = await renderBoard({ alfredMode: 'auto' });
+			assert.ok(!html.includes('Alfred mode'));
+			assert.ok(html.includes('Never modify prd.json') && html.includes('legacy/**'));
+		} finally {
+			(vscode.extensions as unknown as { getExtension: typeof original }).getExtension = original;
+		}
+	});
 
 	it('el tablero sin modo Alfred pinta guardrails y boundaries', () => {
 		const html = getBoardContent(boardPrd as any, null, {}, {

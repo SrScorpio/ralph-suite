@@ -14,6 +14,7 @@ All notable changes to Ralph Suite are documented here.
 
 ### Fixed
 - Auto-ejecutar deja en el tablero por qué no lanzó tarea (sin PRD, tarea en curso o ninguna elegible). El botón del tablero pasa a llamarse AGENTS.md, que es lo que genera.
+- El tablero respeta `ralph-suite.alfredMode`: con `off`, sin Alfred o sin identidad compatible vuelven las rules y boundaries de Ralph; solo `auto` con identidad válida anuncia el modo Alfred.
 
 ## [1.11.2] - 2026-09-20
 

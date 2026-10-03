@@ -148,13 +148,13 @@ export class KanbanPanel {
 		// El modo Alfred se resuelve en cada render, sin caché. Mientras llega la
 		// identidad (≤1000 ms) el tablero no se pinta a medias.
 		void resolveAlfredMode(KanbanPanel.output).then(mode => {
-			this.renderWithAlfred(true, mode.effective ? mode.identity.actions : null);
+			this.renderWithAlfred(mode.effective);
 		}).catch(() => {
-			this.renderWithAlfred(true, null);
+			this.renderWithAlfred(false);
 		});
 	}
 
-	private renderWithAlfred(alfredEffective: boolean, actions: any) {
+	private renderWithAlfred(alfredEffective: boolean) {
 		if (this.disposed) { return; }
 		try {
 			const prd      = this.aggregatedPrd();
