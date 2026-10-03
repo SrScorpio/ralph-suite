@@ -7,11 +7,14 @@ import { buildDependencySvg } from '../kanban/dependencyGraph';
 import { Locale, t } from '../i18n';
 export interface BoardConfig {
 	autoRun: boolean; maxLoops: number; guardrails: string[]; boundaries: string[];
+	runnerNotice?: string | null;
 	view: 'board'|'epic'|'history';
 	health?: HealthScore;
 	locale?: Locale;
 	boardScope?: 'folder' | 'workspace';
 	showScopeSwitch?: boolean;
+	/** Modo Alfred efectivo: el panel no pinta rules ni boundaries (ADR-018 §4). */
+	alfredMode?: boolean;
 }
 
 // ── Shell HTML — loaded ONCE, never replaced ──────────────────────────────────
@@ -121,6 +124,7 @@ code{background:var(--bg3);padding:1px 5px;border-radius:3px;font-family:var(--m
 .log-waiting{animation:pulse 1.5s ease-in-out infinite}
 /* Stats bar */
 .stats-bar{padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:5px}
+.runner-notice{margin:0 12px 8px;padding:6px 10px;border:1px solid var(--border);border-left:3px solid var(--vscode-editorWarning-foreground,#d29922);background:var(--bg2);color:var(--text);font-size:12px}
 .stats-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .project-title{font-weight:700;font-size:14px}
 .project-desc{font-size:11px;color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -406,7 +410,25 @@ export function getBoardContent(
 	const bar = statsBar(prd, cfg);
 	if (cfg.view === 'history') { return bar + historyView(logs, locale); }
 	if (cfg.view === 'epic')    { return bar + epicView(prd, logs, statuses, locale); }
-	return bar + boardView(prd, logs, cfg.autoRun, locale) + guardrailsPanel(cfg.guardrails, cfg.boundaries) + (memories ? memoriesPanel(memories) : '');
+	return bar + boardView(prd, logs, cfg.autoRun, locale)
+		+ (cfg.alfredMode ? alfredModePanel(locale) : guardrailsPanel(cfg.guardrails, cfg.boundaries))
+		+ (memories ? memoriesPanel(memories) : '');
+}
+
+/** Aviso de modo Alfred: no se muestran rules ni boundaries de Ralph. */
+function alfredModePanel(locale: Locale): string {
+	const es = locale === 'es';
+	return `<details class="guardrails-panel">
+  <summary>🤝 ${es ? 'Modo Alfred' : 'Alfred mode'}</summary>
+  <div class="guardrails-body">
+    <div class="guardrails-item">${es
+		? 'Gobernado por Alfred Dev. En este modo no se aplican engine, modelProfiles, agentRole, agentStack, agentProject, agentCheckpoints, guardrails ni boundaries de Ralph.'
+		: 'Governed by Alfred Dev. In this mode Ralph\u2019s engine, modelProfiles, agentRole, agentStack, agentProject, agentCheckpoints, guardrails and boundaries do not apply.'}</div>
+    <div class="guardrails-item">${es
+		? 'Los ajustes siguen en package.json pero Ralph no los usa aquí.'
+		: 'The settings remain in package.json but Ralph does not use them here.'}</div>
+  </div>
+</details>`;
 }
 
 
@@ -541,6 +563,9 @@ function statsBar(prd: Prd, cfg: BoardConfig): string {
 	const views   = [['board', s.board],['epic', s.epic],['history', s.history]] as const;
 	const viewBtns = views.map(([v,l]) => `<button class="btn btn-sm ${cfg.view===v?'btn-view-active':''}" data-action="setView" data-id="${escAttr(v)}">${l}</button>`).join('');
 	const scopeSwitch = cfg.showScopeSwitch ? `<div class="view-switcher"><button class="btn btn-sm ${cfg.boardScope==='folder'?'btn-view-active':''}" data-action="setBoardScope" data-id="folder">${locale==='es'?'Proyecto':'Folder'}</button><button class="btn btn-sm ${cfg.boardScope==='workspace'?'btn-view-active':''}" data-action="setBoardScope" data-id="workspace">Workspace</button></div>` : '';
+	const notice = cfg.runnerNotice
+		? `<div class="runner-notice" role="status">${esc(cfg.runnerNotice)}</div>`
+		: '';
 	const runnerBtn = cfg.autoRun
 		? `<button class="btn btn-sm btn-runner-on" data-action="stopRunner">${s.stop}</button>`
 		: `<button class="btn btn-sm btn-runner-off" data-action="startRunner">${s.autoRun}</button>`;
@@ -552,7 +577,7 @@ function statsBar(prd: Prd, cfg: BoardConfig): string {
 		? `<span class="health-badge health-tooltip" style="background:${health.color}22;color:${health.color}" data-tooltip="${locale==='es' ? 'Completadas' : 'Completion'}: +${health.breakdown.completion}\n${locale==='es' ? 'Tasa de éxito' : 'Success rate'}: +${health.breakdown.successRate}\n${locale==='es' ? 'Actividad reciente' : 'Recent activity'}: +${health.breakdown.throughput}\n${locale==='es' ? 'Penalización por bloqueos' : 'Blocker penalty'}: ${health.breakdown.blockerPenalty}"><span class="health-dot" style="background:${health.color}"></span>${health.score} · ${healthLabel}</span>`
 		: '';
 
-	return `<div class="stats-bar">
+	return notice + `<div class="stats-bar">
   <div class="stats-top">
     <span class="project-title">${esc(prd.project)}</span>
     <span class="project-desc">${esc(prd.description||'')}</span>

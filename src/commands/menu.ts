@@ -9,6 +9,7 @@ import { KanbanPanel } from '../kanbanPanel';
 import { DEFAULT_PRD_PATH, PrdManager } from '../prdManager';
 import { resolveWorkspaceRoot } from '../workspaceRoot';
 import { detectLocale, t } from '../i18n';
+import { alfredModeUiActive } from '../alfredIdentity';
 
 interface MenuQuickPickItem extends vscode.QuickPickItem {
 	id: string;
@@ -22,6 +23,7 @@ export async function showMenu(output: vscode.OutputChannel): Promise<void> {
 	const total = prd ? prd.issues.length : 0;
 	const pct   = total ? Math.round((done / total) * 100) : 0;
 	const strings = t(detectLocale());
+	const alfredActive = alfredModeUiActive();
 
 	const items: MenuQuickPickItem[] = [
 		{ id: 'openBoard', label: `$(layout-panel)  ${strings.menuOpenBoard}`, description: prd ? `${prd.project} — ${done}/${total} (${pct}%)` : strings.menuNoPrd },
@@ -36,7 +38,15 @@ export async function showMenu(output: vscode.OutputChannel): Promise<void> {
 		{ id: 'initProject', label: `$(new-file)  ${strings.menuInitProject}`, description: strings.menuDescInitProject },
 		{ id: 'analyze', label: `$(search)  ${strings.menuAnalyze}`, description: strings.menuDescAnalyze },
 		{ id: 'syncIssue', label: `$(cloud-download)  ${strings.menuSyncIssue}`, description: strings.menuDescSyncIssue },
-		{ id: 'settings', label: `$(gear)  ${strings.menuSettings}`, description: strings.menuDescSettings },
+		{
+			id: 'settings',
+			label: `$(gear)  ${strings.menuSettings}`,
+			description: alfredActive
+				? (detectLocale() === 'es'
+					? 'Modo Alfred activo: engine, modelProfiles y los ajustes de agente de Ralph no se aplican'
+					: 'Alfred mode active: Ralph engine, modelProfiles and agent settings do not apply')
+				: strings.menuDescSettings,
+		},
 	];
 
 	const pick = await vscode.window.showQuickPick(items, {

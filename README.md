@@ -7,10 +7,10 @@ Inspired by the [RALPH Wiggum technique](https://github.com/badlogic/lemmy/issue
 
 ## Install (GitHub Releases, no Marketplace)
 
-Ralph Suite is **not** on the Visual Studio Marketplace. Install the VSIX from [GitHub Releases](https://github.com/SrScorpio/ralph-suite/releases). The published asset is `ralph-suite-1.11.2.vsix`.
+Ralph Suite is **not** on the Visual Studio Marketplace. Install the VSIX from [GitHub Releases](https://github.com/SrScorpio/ralph-suite/releases). The published asset is `ralph-suite-1.12.0.vsix`.
 
 1. Open the latest [GitHub Release](https://github.com/SrScorpio/ralph-suite/releases)
-2. Download `ralph-suite-1.11.2.vsix`
+2. Download `ralph-suite-1.12.0.vsix`
 3. VS Code → Extensions → ⋯ → **Install from VSIX…** → select the file
 
 To build from source instead:
@@ -27,7 +27,7 @@ npm run compile
 
 # 4. Package as .vsix
 npm run package
-# → creates ralph-suite-1.11.2.vsix
+# → creates ralph-suite-1.12.0.vsix
 
 # 5. Install in VS Code
 # Extensions panel → ⋯ → Install from VSIX → select the file
@@ -218,7 +218,7 @@ Configure in `Ctrl+,` → Ralph Suite:
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `engine` | `copilot` | Recommended chat engine injected into the prompt (`copilot`, `codex`, `claude`, `opencode`). Does not switch the Chat provider. |
-| `modelProfiles` | (object) | Recommended `engine`/`model`/`mode` by task type (`default`, `bugfix`, `review`, `security`). Empty `model` = provider default. Modes: `execute` \| `review`. Recommendation only; not a Chat router. |
+| `modelProfiles` | (object) | Recommended `engine`/`model`/`mode` by task type (`default`, `bugfix`, `review`, `security`). Empty `model` = provider default. Modes: `execute` \| `review`. Recommendation only; not a Chat router. Ralph does not read `alfred-dev.modelProfile` (`luna` / `terra` / `sol`). |
 | `agentRole` | `Senior Software Engineer` | Role injected into AGENTS.md |
 | `agentStack` | `` | Tech stack for AGENTS.md |
 | `agentProject` | `` | Project description for AGENTS.md |
@@ -274,15 +274,22 @@ Requires the GitHub MCP connector enabled in VSCode.
 | Local runtime | Ralph | `.ralph/task-<ID>-status`, `-note`, `-log.json` |
 | Stable project memory | Ralph | `.agent/memories.md` |
 
-Public commands a host may feature-detect:
+Public commands a host may feature-detect. Alfred Dev wraps only the first five; the rest stay on Ralph's own palette:
 
 - `ralph-suite.openKanban`
-- `ralph-suite.runTask` — optional `taskId` argument (`ISSUE-001`); otherwise next pending
+- `ralph-suite.runTask` — optional `taskId`, then optional allowlisted `workspaceRoot`; without an id, the next pending task
 - `ralph-suite.startRunner` / `ralph-suite.stopRunner` — require the Kanban webview
+- `ralph-suite.syncIssue` — `githubIssueNumber` (`1..999999`), status `todo|inprogress|blocked|completed`, optional allowlisted `workspaceRoot`
+- `ralph-suite.initProject`, `ralph-suite.analyzeProject`, `ralph-suite.setupProject`
+- `ralph-suite.showMenu`, `ralph-suite.openSettings`, `ralph-suite.optimizeMemory`
 
-In a multi-root window, Ralph prefers the folder that actually has a resolvable PRD (`docs/ralph/prd.json` or legacy root `prd.json`). If none do, it falls back to the first folder and keeps the existing errors (`No workspace open` / `No prd.json found`).
+`ralph-suite.markDone` and `ralph-suite.resetTask` are registered for the Kanban webview. They are not part of the host contract.
 
-Paired issues: [ralph-suite#1](https://github.com/SrScorpio/ralph-suite/issues/1), [alfred-dev-vscode#40](https://github.com/SrScorpio/alfred-dev-vscode/issues/40). `alfred-dev-vscode#3` remains open for the separate parallel-dispatch scope. ADR-016 reserves any future scheduler for Ralph's runner; Alfred does not launch N concurrent `runTask` calls.
+Alfred's bridge calls `runTask` and `syncIssue` without `workspaceRoot`. Ralph then resolves the folder itself: the one with a PRD (`docs/ralph/prd.json`, or a legacy root `prd.json`), or the first folder if none has one. A host that does pass `workspaceRoot` is accepted only when that path is one of the open workspace folders.
+
+Model profiles do not cross the bridge. `alfred-dev.modelProfile` (`luna`, `terra`, `sol`) never selects `ralph-suite.modelProfiles`.
+
+Paired issues: [ralph-suite#1](https://github.com/SrScorpio/ralph-suite/issues/1), [alfred-dev-vscode#40](https://github.com/SrScorpio/alfred-dev-vscode/issues/40). ADR-016 keeps any future parallel scheduler inside Ralph's runner; Alfred does not launch N concurrent `runTask` calls.
 
 ---
 

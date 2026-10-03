@@ -31,6 +31,24 @@ export function getTaskRunBlockReason(
 		: null;
 }
 
+export type RunnerStopReason = 'no-prd' | 'in-progress' | 'none-eligible';
+
+export function runnerStopMessage(reason: RunnerStopReason, locale: 'en' | 'es' = 'en'): string {
+	const messages = {
+		en: {
+			'no-prd': 'No PRD loaded. Auto-run did not start any task.',
+			'in-progress': 'A task is already in progress. Auto-run did not start another task.',
+			'none-eligible': 'No eligible task. Auto-run did not start any task.',
+		},
+		es: {
+			'no-prd': 'No hay PRD cargado. Auto-ejecutar no ha lanzado ninguna tarea.',
+			'in-progress': 'Hay una tarea en curso. Auto-ejecutar no ha lanzado otra.',
+			'none-eligible': 'No hay ninguna tarea elegible. Auto-ejecutar no ha lanzado ninguna.',
+		},
+	};
+	return messages[locale][reason];
+}
+
 export function pendingTasksMessage(
 	issues: readonly { status: string }[],
 	emptyMessage: string,

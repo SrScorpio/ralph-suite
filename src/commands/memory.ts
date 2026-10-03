@@ -9,10 +9,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { RalphStateManager } from '../stateManager';
 import { sendToChat } from '../chatLauncher';
+import { AlfredIdentity } from '../alfredIdentity';
+import { buildAlfredOptimizePrompt } from '../alfredPrompt';
 
 // ── Prompt builder ───────────────────────────────────────────────────────────
 
-export function buildOptimizePrompt(memoriesPath: string, memoriesContent: string): string {
+export function buildOptimizePrompt(memoriesPath: string, memoriesContent: string, alfredIdentity?: AlfredIdentity | null): string {
+	if (alfredIdentity) {
+		return buildAlfredOptimizePrompt(alfredIdentity, memoriesPath, memoriesContent);
+	}
 	return `You are helping maintain a project memory file used by AI agents.
 
 The file \`${memoriesPath}\` currently contains:
@@ -41,7 +46,8 @@ After writing the file, confirm with: "Memory optimized — reduced from X to Y 
 export async function optimizeMemory(
 	root: string,
 	output: vscode.OutputChannel,
-	review: boolean
+	review: boolean,
+	alfredIdentity?: AlfredIdentity | null
 ): Promise<void> {
 	const configuredPath = vscode.workspace.getConfiguration('ralph-suite').get<string>('memoriesPath', '.agent/memories.md');
 	const memoriesPath = RalphStateManager.memoriesPath(root, configuredPath);
@@ -59,7 +65,7 @@ export async function optimizeMemory(
 	const lineCount = content.split('\n').length;
 	output.appendLine(`[Memory] Optimizing memories.md (${lineCount} lines, ${content.length} chars)`);
 
-	const prompt = buildOptimizePrompt(memoriesPath.replace(/\\/g, '/'), content);
+	const prompt = buildOptimizePrompt(memoriesPath.replace(/\\/g, '/'), content, alfredIdentity);
 
 	if (!review) {
 		// Direct mode — agent rewrites the file without confirmation

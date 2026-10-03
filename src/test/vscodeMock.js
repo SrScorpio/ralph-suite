@@ -54,6 +54,7 @@ const windowApi = {
 	showQuickPick: async () => undefined,
 	showTextDocument: async () => undefined,
 	showWarningMessage: async () => undefined,
+	registerTreeDataProvider: () => noopDisposable,
 };
 
 const workspaceApi = {
@@ -65,12 +66,18 @@ const workspaceApi = {
 	}),
 	getConfiguration: () => configuration,
 	openTextDocument: async () => ({}),
+	isTrusted: true,
 	workspaceFolders: [],
+};
+
+const extensionsApi = {
+	getExtension: () => undefined,
 };
 
 const vscodeMock = {
 	commands: commandsApi,
 	env: envApi,
+	extensions: extensionsApi,
 	RelativePattern: class RelativePattern {
 		constructor(base, pattern) {
 			this.base = base;
@@ -80,6 +87,21 @@ const vscodeMock = {
 	ViewColumn: { Beside: 2 },
 	ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
 	StatusBarAlignment: { Left: 1 },
+	TreeItem: class TreeItem {
+		constructor(label, collapsibleState) {
+			this.label = label;
+			this.collapsibleState = collapsibleState;
+		}
+	},
+	TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
+	ThemeIcon: class ThemeIcon {
+		constructor(id) { this.id = id; }
+	},
+	EventEmitter: class EventEmitter {
+		constructor() { this.event = () => noopDisposable; }
+		fire() {}
+		dispose() {}
+	},
 	window: windowApi,
 	workspace: workspaceApi,
 	Uri: {},

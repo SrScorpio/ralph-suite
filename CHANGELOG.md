@@ -13,6 +13,18 @@ All notable changes to Ralph Suite are documented here.
 - Defaults de `modelProfiles`: `engine` copilot, `model` vacío y `mode` execute (review para review); se elimina `security-audit`. Si tenías `gpt-5`/`security-audit` en settings.json, VS Code conserva el override: pon `model: ""` y `mode: execute|review`.
 
 ### Fixed
+- Auto-ejecutar deja en el tablero por qué no lanzó tarea (sin PRD, tarea en curso o ninguna elegible). El botón del tablero pasa a llamarse AGENTS.md, que es lo que genera.
+- El tablero respeta `ralph-suite.alfredMode`: con `off`, sin Alfred o sin identidad compatible vuelven las rules y boundaries de Ralph; solo `auto` con identidad válida anuncia el modo Alfred.
+
+## [1.12.0] - 2026-10-03
+
+### Added
+
+- Alfred mode yields the board and task prompt when `ralph-suite.alfredMode` is `auto` and Alfred Dev announces a valid identity. The prompt names the subagent and does not declare a provider or model.
+
+### Fixed
+
+- The board follows the resolved Alfred mode. `off`, a missing extension, an invalid identity, or a detection failure restore Ralph rules and boundaries.
 
 ## [1.11.2] - 2026-09-20
 
