@@ -13,6 +13,7 @@ All notable changes to Ralph Suite are documented here.
 - Defaults de `modelProfiles`: `engine` copilot, `model` vacío y `mode` execute (review para review); se elimina `security-audit`. Si tenías `gpt-5`/`security-audit` en settings.json, VS Code conserva el override: pon `model: ""` y `mode: execute|review`.
 
 ### Fixed
+- Auto-ejecutar deja en el tablero por qué no lanzó tarea (sin PRD, tarea en curso o ninguna elegible). El botón del tablero pasa a llamarse AGENTS.md, que es lo que genera.
 
 ## [1.11.2] - 2026-09-20
 

@@ -8,7 +8,7 @@ import { buildPushPrompt, buildSyncPrompt } from './kanban/gitHubSync';
 import { buildContextRefreshPrompt } from './kanban/contextRefresh';
 import { importPlanToPrd, buildAddFromChatPrompt, persistNewBacklogItem, applyEditedBacklogId, appendImportedIssues } from './kanban/planImport';
 import { sendToChat } from './chatLauncher';
-import { pendingTasksMessage } from './commands/task';
+import { pendingTasksMessage, runnerStopMessage, RunnerStopReason } from './commands/task';
 import { safeMessageId, isBoardStatus, cleanText, cleanTextArray, cleanPriority, cleanIssueFields, getNonce } from './boardSanitizers';
 import { computeHealthScore } from './healthScore';
 import { detectLocale } from './i18n';
@@ -30,6 +30,7 @@ export class KanbanPanel {
 	private readonly watchers: vscode.Disposable[] = [];
 
 	private autoRun    = false;
+	private runnerNotice: string | null = null;
 	private loopCount  = 0;
 	private completedSinceOptimize = 0;  // tracks tasks completed since last memory optimization
 	private disposed   = false;
@@ -200,6 +201,7 @@ export class KanbanPanel {
 		}
 		return {
 			autoRun:    this.autoRun,
+			runnerNotice: this.runnerNotice,
 			maxLoops:   s.get<number>('maxLoops', 5),
 			guardrails: s.get<string[]>('guardrails', []),
 			boundaries: s.get<string[]>('boundaries', []),
@@ -308,6 +310,7 @@ export class KanbanPanel {
 
 	private startRunner() {
 		const maxLoops = vscode.workspace.getConfiguration('ralph-suite').get<number>('maxLoops', 5);
+		this.runnerNotice = null;
 		this.autoRun   = true;
 		this.loopCount = 0;
 		this.runnerAbortController = new AbortController();
@@ -317,8 +320,19 @@ export class KanbanPanel {
 		this.runNextTask();
 	}
 
+	private haltRunner(reason: RunnerStopReason) {
+		const locale = detectLocale() === 'es' ? 'es' : 'en';
+		this.runnerNotice = runnerStopMessage(reason, locale);
+		KanbanPanel.output?.appendLine(`[Runner] ${this.runnerNotice}`);
+		this.autoRun = false;
+		this.runnerAbortController?.abort();
+		this.runnerAbortController = null;
+		if (this.runnerTimer) { clearTimeout(this.runnerTimer); this.runnerTimer = null; }
+		this.render();
+	}
 	private stopRunner() {
 		this.autoRun = false;
+		this.runnerNotice = null;
 		this.runnerAbortController?.abort();
 		this.runnerAbortController = null;
 		if (this.runnerTimer) { clearTimeout(this.runnerTimer); this.runnerTimer = null; }
@@ -340,21 +354,23 @@ export class KanbanPanel {
 			return;
 		}
 		const prd = this.aggregatedPrd();
-		if (!prd) { this.stopRunner(); return; }
+		if (!prd) { this.haltRunner('no-prd'); return; }
 
 		const inProgress = prd.issues.find(i => i.status === 'inprogress');
 		if (inProgress) {
-			KanbanPanel.output?.appendLine(`[Runner] ${inProgress.id} still in progress — waiting`);
+			KanbanPanel.output?.appendLine(`[Runner] ${inProgress.id} still in progress — not starting another task`);
+			this.haltRunner('in-progress');
 			return;
 		}
 		const next = PrdManager.nextPending(prd, this.root);
 		if (!next) {
+			const locale = detectLocale() === 'es' ? 'es' : 'en';
 			vscode.window.showInformationMessage(pendingTasksMessage(
 				prd.issues,
-				'Ralph: all tasks completed!',
-				'Ralph: no hay tareas elegibles; quedan tareas bloqueadas o fallidas.',
+				runnerStopMessage('none-eligible', locale),
+				runnerStopMessage('none-eligible', locale),
 			));
-			this.stopRunner();
+			this.haltRunner('none-eligible');
 			return;
 		}
 		this.loopCount++;

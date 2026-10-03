@@ -96,11 +96,14 @@ export async function setupProject(output: vscode.OutputChannel): Promise<void> 
 	if (!root) { vscode.window.showErrorMessage('No workspace open.'); return; }
 
 	const agentsPath = path.join(root, 'AGENTS.md');
-	if (fs.existsSync(agentsPath)) {
-		const action = await vscode.window.showInformationMessage(
-			'AGENTS.md already exists.', 'Regenerate', 'Open to edit', 'Cancel'
-		);
-		if (!action || action === 'Cancel') { return; }
+	const agentsAlreadyPresent = fs.existsSync(agentsPath);
+	if (agentsAlreadyPresent) {
+		output.appendLine('[Setup] AGENTS.md already exists — waiting for Regenerate, Open to edit, or Cancel');
+		const action = await existingAgentsChoice();
+		if (!action || action === 'Cancel') {
+			vscode.window.showInformationMessage('AGENTS.md ya existe. No se ha generado nada.');
+			return;
+		}
 		if (action === 'Open to edit') {
 			const doc = await vscode.workspace.openTextDocument(agentsPath);
 			await vscode.window.showTextDocument(doc);
@@ -148,6 +151,12 @@ export async function setupProject(output: vscode.OutputChannel): Promise<void> 
 	});
 }
 
+
+export async function existingAgentsChoice(): Promise<string | undefined> {
+	return vscode.window.showInformationMessage(
+		'AGENTS.md already exists.', 'Regenerate', 'Open to edit', 'Cancel'
+	);
+}
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 export function prdDisplayPath(root: string, prdPath: string): string {

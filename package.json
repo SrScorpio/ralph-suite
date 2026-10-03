@@ -79,6 +79,23 @@
         "mac": "cmd+shift+r"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ralph-suite-container",
+          "title": "Ralph Suite",
+          "icon": "$(layout-panel)"
+        }
+      ]
+    },
+    "views": {
+      "ralph-suite-container": [
+        {
+          "id": "ralph-suite.sidebar",
+          "name": "Ralph Suite"
+        }
+      ]
+    },
     "menus": {
       "commandPalette": [
         {

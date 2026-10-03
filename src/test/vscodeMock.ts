@@ -55,6 +55,7 @@ const windowApi = {
 	showQuickPick: async () => undefined,
 	showTextDocument: async () => undefined,
 	showWarningMessage: async () => undefined,
+	registerTreeDataProvider: () => noopDisposable,
 };
 
 const workspaceApi = {
@@ -78,6 +79,21 @@ const vscodeMock = {
 	ViewColumn: { Beside: 2 },
 	ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
 	StatusBarAlignment: { Left: 1 },
+	TreeItem: class TreeItem {
+		command?: { command: string; title: string };
+		iconPath?: unknown;
+		contextValue?: string;
+		constructor(public label: string, public collapsibleState?: number) {}
+	},
+	TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
+	ThemeIcon: class ThemeIcon {
+		constructor(public id: string) {}
+	},
+	EventEmitter: class EventEmitter {
+		event = () => ({ dispose: () => undefined });
+		fire() {}
+		dispose() {}
+	},
 	window: windowApi,
 	workspace: workspaceApi,
 	Uri: {},

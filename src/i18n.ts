@@ -74,6 +74,12 @@ export interface UIStrings {
 	menuDescSyncIssue: string;
 	menuDescSettings: string;
 
+	// Activity Bar sidebar
+	sidebarOpenMenu: string;
+	sidebarNoWorkspace: string;
+	sidebarBacklog: string;
+	sidebarProgress: (done: number, total: number, pct: number) => string;
+
 	// Board columns
 	colTodo: string;
 	colInProgress: string;
@@ -142,7 +148,7 @@ const en: UIStrings = {
 	openMemory: '🧠 Memory',
 	optimize: '🧹 Optimize',
 	plan: '⬇ Plan',
-	agents: '⚙ Agents',
+	agents: '⚙ AGENTS.md',
 	settings: '⚙',
 	refresh: '↻',
 	menuOpenBoard: 'Open Board',
@@ -173,6 +179,10 @@ const en: UIStrings = {
 	menuDescAnalyze: 'Generate a PRD from the current workspace',
 	menuDescSyncIssue: 'Sync GitHub issue status to the local task',
 	menuDescSettings: 'Configure Ralph Suite',
+	sidebarOpenMenu: 'Open menu',
+	sidebarNoWorkspace: 'No workspace open',
+	sidebarBacklog: 'Backlog',
+	sidebarProgress: (done, total, pct) => `${done}/${total} completed (${pct}%)`,
 	colTodo: 'To Do',
 	colInProgress: 'In Progress',
 	colDone: 'Done',
@@ -232,7 +242,7 @@ const es: UIStrings = {
 	openMemory: '🧠 Memoria',
 	optimize: '🧹 Optimizar',
 	plan: '⬇ Plan',
-	agents: '⚙ Agents',
+	agents: '⚙ AGENTS.md',
 	settings: '⚙',
 	refresh: '↻',
 	menuOpenBoard: 'Abrir tablero',
@@ -263,6 +273,10 @@ const es: UIStrings = {
 	menuDescAnalyze: 'Generar un PRD desde el workspace actual',
 	menuDescSyncIssue: 'Sincronizar el estado de un issue GitHub con la tarea local',
 	menuDescSettings: 'Configurar Ralph Suite',
+	sidebarOpenMenu: 'Abrir menú',
+	sidebarNoWorkspace: 'Sin workspace abierto',
+	sidebarBacklog: 'Backlog',
+	sidebarProgress: (done, total, pct) => `${done}/${total} completadas (${pct}%)`,
 	colTodo: 'Por hacer',
 	colInProgress: 'En progreso',
 	colDone: 'Completado',

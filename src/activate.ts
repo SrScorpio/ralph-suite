@@ -19,15 +19,21 @@ import { listRalphFolders } from './workspaceFolders';
 import { buildAnalyzeExistingProjectPrompt } from './kanban/analyzeProject';
 import { sendToChat } from './chatLauncher';
 import { syncIssue } from './commands/syncIssue';
+import { RalphSidebarProvider } from './sidebarTree';
 
 export function _doActivate(context: vscode.ExtensionContext, output: vscode.OutputChannel) {
-	// Status bar
+	// Status bar — se conserva: el botón inferior sigue abriendo el menú.
 	const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
 	statusBar.text = '$(layout-panel) Ralph';
 	statusBar.tooltip = 'Ralph Suite';
 	statusBar.command = 'ralph-suite.showMenu';
 	statusBar.show();
 	context.subscriptions.push(statusBar);
+
+	const sidebar = new RalphSidebarProvider();
+	context.subscriptions.push(
+		vscode.window.registerTreeDataProvider('ralph-suite.sidebar', sidebar),
+	);
 
 	// Register all commands
 	context.subscriptions.push(
@@ -194,9 +200,9 @@ export function _doActivate(context: vscode.ExtensionContext, output: vscode.Out
 		const prdWatcher = vscode.workspace.createFileSystemWatcher(
 			new vscode.RelativePattern(workspaceRoot, prdPattern)
 		);
-		prdWatcher.onDidChange(() => { output.appendLine('[Ralph] prd.json changed'); KanbanPanel.refresh(); });
-		prdWatcher.onDidCreate(() => { output.appendLine('[Ralph] prd.json created'); KanbanPanel.refresh(); });
-		prdWatcher.onDidDelete(() => KanbanPanel.refresh());
+		prdWatcher.onDidChange(() => { output.appendLine('[Ralph] prd.json changed'); KanbanPanel.refresh(); sidebar.refresh(); });
+		prdWatcher.onDidCreate(() => { output.appendLine('[Ralph] prd.json created'); KanbanPanel.refresh(); sidebar.refresh(); });
+		prdWatcher.onDidDelete(() => { KanbanPanel.refresh(); sidebar.refresh(); });
 		context.subscriptions.push(prdWatcher);
 	}
 
