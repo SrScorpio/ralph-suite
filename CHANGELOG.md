@@ -7,6 +7,7 @@ All notable changes to Ralph Suite are documented here.
 ## [Unreleased]
 
 ### Added
+- El chat de una tarea en modo Alfred se abre nombrando al subagente anunciado (`@junior-dev` y el campo `agent`). Sin identidad válida sigue cayendo en el chat activo.
 - IDs nuevos de backlog en formato `ISSUE-NNN` (mínimo 3 letras + número). Analyze, Init, import de plan, addIssue y Add from Chat ya no generan `1` ni `STEP-*`. IDs legacy se conservan.
 
 ### Changed

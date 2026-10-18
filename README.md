@@ -269,7 +269,7 @@ Requires the GitHub MCP connector enabled in VSCode.
 
 | Layer | Owner | Path / API |
 |-------|--------|------------|
-| Collaborative work | Alfred / GitHub Issues+PRs | GitHub |
+| Collaborative work | Alfred / GitHub Issues+PRs | GitHub. Work that lands in this repo is recorded there ([ADR-004](https://github.com/SrScorpio/alfred-dev-vscode/blob/main/docs/adr/ADR-004-registro-unico-del-trabajo-cross-repo.md)); Ralph does not open a parallel backlog for it. |
 | Local backlog | Ralph | `docs/ralph/prd.json` (`ralph-suite.prdPath`; legacy root `prd.json` still loads) |
 | Local runtime | Ralph | `.ralph/task-<ID>-status`, `-note`, `-log.json` |
 | Stable project memory | Ralph | `.agent/memories.md` |

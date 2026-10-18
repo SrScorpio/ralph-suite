@@ -80,7 +80,8 @@ function waitWithAbort(ms: number, signal?: AbortSignal): Promise<boolean> {
 export async function runTaskWithRetry(
 	task: any, prompt: string, root: string,
 	freshContext: boolean, minWaitMs: number, timeoutMs: number,
-	retries: number, output: vscode.OutputChannel, signal?: AbortSignal
+	retries: number, output: vscode.OutputChannel, signal?: AbortSignal,
+	agent?: string,
 ): Promise<void> {
 	const pollMs = vscode.workspace.getConfiguration('ralph-suite').get<number>('pollIntervalMs', 5000);
 
@@ -95,6 +96,7 @@ export async function runTaskWithRetry(
 				fallbackMessage: 'Prompt copied — paste in Chat.',
 				timeoutMs: Math.min(timeoutMs, 10000),
 				signal,
+				agent,
 			});
 			if (!sent) {
 				vscode.window.showWarningMessage(`Ralph: no se pudo abrir Chat para ${task.id}. La tarea no se ha iniciado.`);
