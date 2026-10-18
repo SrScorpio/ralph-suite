@@ -62,7 +62,7 @@ export async function initProject(root: string, output: vscode.OutputChannel, al
 	const prompt = buildInitPrompt(goal, root, alfredIdentity);
 	output.appendLine(`[Ralph] Init prompt: ${prompt.length} chars`);
 
-	const sent = await sendToChat(prompt);
+	const sent = await sendToChat(prompt, { agent: alfredIdentity?.actions.initProject.agent });
 	if (!sent) {
 		output.appendLine('[Ralph] Chat unavailable — prompt copied to clipboard');
 		return;

@@ -72,12 +72,14 @@ export async function optimizeMemory(
 		await sendToChat(prompt, {
 			freshContext: true,
 			fallbackMessage: 'Prompt copied — paste in Chat to optimize memories.',
+			agent: alfredIdentity?.actions.optimizeMemory.agent,
 		});
 		output.appendLine('[Memory] Optimization prompt sent — agent will apply directly');
 		vscode.window.showInformationMessage('Memory optimization started — agent will rewrite memories.md directly.');
 	} else {
 		// Review mode — show prompt in chat for user to confirm
 		await sendToChat(prompt + '\n\n> ⚠️ Review the proposed changes before confirming. Only write the file if you are happy with the result.', {
+			agent: alfredIdentity?.actions.optimizeMemory.agent,
 			freshContext: true,
 			fallbackMessage: 'Prompt copied — paste in Chat to review optimization.',
 		});

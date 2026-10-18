@@ -84,7 +84,10 @@ export function _doActivate(context: vscode.ExtensionContext, output: vscode.Out
 			const prompt = identity
 				? buildAlfredAnalyzePrompt(identity, folders.map(folder => folder.root))
 				: buildAnalyzeExistingProjectPrompt(folders.map(folder => folder.root));
-			await sendToChat(prompt, { fallbackMessage: 'Analyze prompt copied — paste in Chat.' });
+			await sendToChat(prompt, {
+				fallbackMessage: 'Analyze prompt copied — paste in Chat.',
+				agent: identity?.actions.analyzeProject.agent,
+			});
 		}),
 
 		vscode.commands.registerCommand('ralph-suite.initProject', async () => {
@@ -144,7 +147,7 @@ export function _doActivate(context: vscode.ExtensionContext, output: vscode.Out
 			const minWaitMs    = cfg.get<number>('minWaitMs', 15000);
 			const timeoutMs    = cfg.get<number>('taskTimeoutMs', 600000);
 			const retries      = cfg.get<number>('taskRetries', 1);
-			await runTaskWithRetry(task, prompt, root, freshContext, minWaitMs, timeoutMs, retries, output, KanbanPanel.runnerSignal());
+			await runTaskWithRetry(task, prompt, root, freshContext, minWaitMs, timeoutMs, retries, output, KanbanPanel.runnerSignal(), identity?.actions.runTask.agent);
 		}),
 
 		vscode.commands.registerCommand('ralph-suite.syncIssue', (githubIssueNumber: unknown, status: unknown, workspaceRoot?: string) => {

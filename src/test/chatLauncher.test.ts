@@ -112,6 +112,36 @@ describe('chatLauncher', () => {
 			}
 		});
 
+		it('addresses the named agent and passes it to chat.open', async () => {
+			let calledArgs: { query?: string; agent?: string } | undefined;
+			const origExec = vscode.commands.executeCommand;
+			(vscode.commands as any).executeCommand = async (_cmd: string, args: { query?: string; agent?: string }) => {
+				calledArgs = args;
+			};
+			try {
+				await sendToChat('Haz la tarea', { agent: 'junior-dev' });
+			} finally {
+				(vscode.commands as any).executeCommand = origExec;
+			}
+			assert.strictEqual(calledArgs?.agent, 'junior-dev');
+			assert.ok(calledArgs?.query?.startsWith('@junior-dev\n'));
+		});
+
+		it('ignores an agent name outside the allowlist', async () => {
+			let calledArgs: { query?: string; agent?: string } | undefined;
+			const origExec = vscode.commands.executeCommand;
+			(vscode.commands as any).executeCommand = async (_cmd: string, args: { query?: string; agent?: string }) => {
+				calledArgs = args;
+			};
+			try {
+				await sendToChat('Haz la tarea', { agent: '../alfred' });
+			} finally {
+				(vscode.commands as any).executeCommand = origExec;
+			}
+			assert.strictEqual(calledArgs?.agent, undefined);
+			assert.strictEqual(calledArgs?.query, 'Haz la tarea');
+		});
+
 		it('does not open chat when the signal is already aborted', async () => {
 			const controller = new AbortController();
 			controller.abort();

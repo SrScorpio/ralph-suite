@@ -28,6 +28,12 @@ interface ChatOptions {
 	timeoutMs?: number;
 	/** Stop waiting when the runner is stopped. */
 	signal?: AbortSignal;
+	/**
+	 * Subagente de Alfred al que va el prompt (`junior-dev`, `alfred`…).
+	 * Se envía como mención y, si el chat lo admite, como participante.
+	 * Sin valor, el prompt cae en el chat que esté activo.
+	 */
+	agent?: string;
 }
 
 /**
@@ -45,7 +51,10 @@ export async function sendToChat(prompt: string, options: ChatOptions = {}): Pro
 		fallbackMessage = 'Prompt copied — paste in Chat.',
 		timeoutMs = 10000,
 		signal,
+		agent,
 	} = options;
+	const agentName = typeof agent === 'string' && /^[a-z0-9-]{1,40}$/.test(agent) ? agent : undefined;
+	const addressed = agentName && !prompt.startsWith(`@${agentName}`) ? `@${agentName}\n${prompt}` : prompt;
 	let abortListener: (() => void) | undefined;
 
 	try {
@@ -57,8 +66,9 @@ export async function sendToChat(prompt: string, options: ChatOptions = {}): Pro
 			}
 			if (signal?.aborted) { throw new Error('Chat command aborted'); }
 			await vscode.commands.executeCommand('workbench.action.chat.open', {
-				query: prompt,
+				query: addressed,
 				isPartialQuery: false,
+				...(agentName ? { agent: agentName } : {}),
 			});
 		})();
 		const timeout = new Promise<never>((_, reject) => {
@@ -77,7 +87,7 @@ export async function sendToChat(prompt: string, options: ChatOptions = {}): Pro
 		// intentionally ignored because state changes happen only after true.
 		return true;
 	} catch {
-		await vscode.env.clipboard.writeText(prompt);
+		await vscode.env.clipboard.writeText(addressed);
 		vscode.window.showInformationMessage(fallbackMessage);
 		return false;
 	} finally {
